@@ -159,8 +159,11 @@ def to_celsius(values, units):
 def band_score(lclouds, mclouds, precip, wind, gust, rh, cbase, elev):
     """View Score 0-100: viršūnės matomumo tikimybė. hclouds nebaudžiami."""
     score = 100.0
-    score -= (lclouds or 0) * 0.9
-    if cbase is not None:
+    low = lclouds or 0
+    score -= low * 0.9
+    # cloud base bauda tik kai žemų debesų realiai yra — kitaip proxy
+    # (125×(T−Td)) prie vandenyno visada rodo "žemai" net giedrą dieną
+    if cbase is not None and low >= 30:
         if cbase < elev + 150:
             score -= 40
         elif cbase < elev + 400:
@@ -352,6 +355,20 @@ def build_html(hikes_data, now, stale_note=""):
                 badges += (f'<div class="win" style="background:{bg};color:{fg}">'
                            f'<b>{fmt_window(w, now)}</b>{golden} · score {w["display"]} · {v}</div>')
 
+        # 24h juostelė: kiekvienos 3h juostos score, spalvinta pagal verdiktą —
+        # matosi ir tarpiniai 40-59 ("rizikinga, bet įmanoma")
+        strip = ""
+        if not is_done:
+            cells = ""
+            for b in h.get("bands", []):
+                if b["t"] + dt.timedelta(hours=3) <= now or b["t"] > now + dt.timedelta(hours=24):
+                    continue
+                _, fg, bg = verdict(b["score"])
+                cells += (f'<span class="b" style="background:{bg};color:{fg}">'
+                          f'{b["t"].strftime("%H")}h<br>{round(b["score"])}</span>')
+            if cells:
+                strip = f'<div class="striplbl">Artimiausios 24 val. (score kas 3h):</div><div class="strip">{cells}</div>'
+
         note = ""
         if not is_done:
             if hike["name"] == "Ryten":
@@ -361,7 +378,7 @@ def build_html(hikes_data, now, stale_note=""):
 
         title_prefix = "✅ " if is_done else ("🌙 ŠĮVAKAR: " if is_tonight else "")
         cls = "card done" if is_done else "card"
-        body = "" if is_done else badges + note
+        body = "" if is_done else badges + strip + note
         cards.append(f"""
     <div class="{cls}">
       <div class="hname">{title_prefix}{hike['name']} <span class="meta">{hike['elev_m']} m · {hike['zone']} · 🚗 {hike[drive_key]} min nuo {base_name}</span></div>
@@ -391,6 +408,10 @@ def build_html(hikes_data, now, stale_note=""):
   .meta {{ font-size:14px; font-weight:400; color:#9ca3af; display:block; margin-top:2px; }}
   .win {{ border-radius:10px; padding:8px 12px; margin:6px 0; font-size:16px; }}
   .note {{ font-size:14px; color:#fbbf24; margin-top:6px; }}
+  .striplbl {{ font-size:12px; color:#9ca3af; margin-top:8px; }}
+  .strip {{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }}
+  .b {{ border-radius:6px; padding:3px 7px; font-size:13px; line-height:1.2;
+       text-align:center; min-width:30px; }}
   .stale {{ background:#7f1d1d; color:#fecaca; border-radius:10px; padding:10px 14px;
             margin-bottom:16px; font-size:16px; }}
   .footer {{ margin-top:24px; font-size:12px; color:#6b7280; text-align:center; }}
@@ -448,7 +469,8 @@ def main():
             data = fetch_point(hike["lat"], hike["lon"], api_key)
             bands = parse_bands(data, hike["elev_m"], now)
             windows = find_windows(bands, is_golden)
-            hikes_data.append({"hike": hike, "windows": windows, "error": False})
+            hikes_data.append({"hike": hike, "windows": windows, "bands": bands,
+                               "error": False})
             print(f"OK  {hike['name']}: {len(bands)} juostų, {len(windows)} langų")
         except Exception as e:
             failures += 1
