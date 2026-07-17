@@ -375,8 +375,9 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
                     if (b.get("wind") or 0) > 8:
                         why += f' 💨{round(b["wind"])}'
                     mm = " ".join(f"{k}{v}" for k, v in b.get("models", {}).items())
-                    cells += (f'<span class="b" style="background:{bg};color:{fg}">'
-                              f'{b["t"].strftime("%H:%M")}<br><b>{round(b["score"])}</b>'
+                    cells += (f'<span class="b">'
+                              f'{b["t"].strftime("%H:%M")}<br>'
+                              f'<b style="color:{fg}">{round(b["score"])}</b>'
                               f'<br><span class="x">{why}</span>'
                               f'<br><span class="m">{mm}</span></span>')
                 lbl = day_label(bs[0]["t"], now).capitalize()
@@ -407,6 +408,7 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
     </details>""")
 
     updated = now.strftime("%Y-%m-%d %H:%M")
+    updated_short = now.strftime("%H:%M")
     runs_txt = ""
     if model_runs:
         runs_txt = ("<br>Modelių leidimai: "
@@ -425,6 +427,15 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
   body {{ margin:0; padding:16px; background:#0b1020; color:#e5e7eb;
          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
          font-size:18px; line-height:1.45; }}
+  .topbar {{ display:flex; justify-content:space-between; align-items:center;
+             margin-bottom:12px; }}
+  .refresh {{ background:#2563eb; color:#fff; border:none; border-radius:10px;
+              padding:12px 18px; font-size:16px; font-weight:600; }}
+  .upd {{ font-size:14px; color:#9ca3af; }}
+  .legend {{ background:#111a33; border-radius:12px; padding:12px 14px;
+             margin-bottom:16px; font-size:14px; color:#cbd5e1; }}
+  .legend summary {{ cursor:pointer; font-size:15px; }}
+  .legend p {{ margin:8px 0 0; }}
   .card {{ background:#111a33; border-radius:14px; padding:14px 16px; margin-bottom:14px; }}
   .card summary {{ cursor:pointer; list-style:none; }}
   .card summary::-webkit-details-marker {{ display:none; }}
@@ -439,7 +450,8 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
   .striplbl {{ font-size:12px; color:#9ca3af; margin-top:8px; }}
   .strip {{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }}
   .b {{ border-radius:6px; padding:3px 7px; font-size:13px; line-height:1.25;
-       text-align:center; min-width:44px; }}
+       text-align:center; min-width:44px; background:#182142; color:#94a3b8; }}
+  .b b {{ font-size:16px; }}
   .x {{ font-size:10px; opacity:0.85; }}
   .m {{ font-size:9px; opacity:0.7; letter-spacing:0.5px; }}
   .stale {{ background:#7f1d1d; color:#fecaca; border-radius:10px; padding:10px 14px;
@@ -450,6 +462,30 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
 </head>
 <body>
   {stale_html}
+  <div class="topbar">
+    <button class="refresh" onclick="location.reload()">🔄 Atnaujinti</button>
+    <span class="upd">Atnaujinta {updated_short}</span>
+  </div>
+  <details class="legend">
+    <summary>ℹ️ Kaip skaičiuojamas score? Kas yra M E I G?</summary>
+    <p><b>Score 0–100</b> — tikimybė, kad nuo viršūnės matysis vaizdai (ne oro
+    „gerumas"!). Tai <b>4 orų modelių vidurkis</b>; po langeliu — kiekvieno
+    modelio balas atskirai:</p>
+    <p><b>M</b> = MEPS (norvegų, 2.5 km — tiksliausias Lofotenams)<br>
+    <b>E</b> = ECMWF (europinis, 9 km)<br>
+    <b>I</b> = ICON-EU (vokiečių, 7 km)<br>
+    <b>G</b> = GFS (amerikiečių, 25 km)</p>
+    <p>Kai visi rodo panašiai — prognozė patikima; kai išsiskiria (pvz. M80 E75
+    I0 G0) — 50/50, spręsk pagal dangų.</p>
+    <p><b>Baudos:</b> daugiausiai atima žemi debesys (dengia viršūnę) ir debesų
+    pagrindas žemiau viršūnės; toliau lietus, vėjas &gt;8 m/s, rūkas. Aukšti
+    plunksniniai debesys nebaudžiami — jie tik gražina dangų.</p>
+    <p><b>Spalvos:</b> <span style="color:#22c55e">≥80 PUIKUS</span> ·
+    <span style="color:#86efac">60–79 GERAS</span> ·
+    <span style="color:#facc15">40–59 RIZIKINGA</span> ·
+    <span style="color:#f87171">&lt;40 NEVERTA</span>.
+    <b>Langas</b> = ištisinis ≥3 val. periodas su score ≥60.</p>
+  </details>
   {''.join(cards)}
   <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: {model_txt} ·
   Score = viršūnės matomumo tikimybė · 🌅 = golden light · ☁ žemi debesys % · 🌧 mm · 💨 m/s ·
