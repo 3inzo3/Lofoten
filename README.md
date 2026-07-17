@@ -40,8 +40,8 @@ Kiekvienai 3h prognozės juostai iki 2026-07-23 06:00:
 | Baudos | Kiek |
 |---|---|
 | Žemi debesys | `lclouds% × 0.9` |
-| Cloud base žemiau viršūnės +150 m | −40 (viršūnė debesyje) |
-| Cloud base žemiau viršūnės +400 m | −15 (rizika) |
+| Cloud base žemiau viršūnės +150 m (kai lclouds ≥ 30 %) | −40 (viršūnė debesyje) |
+| Cloud base žemiau viršūnės +400 m (kai lclouds ≥ 30 %) | −15 (rizika) |
 | Vidutiniai debesys | `mclouds% × 0.15` |
 | Krituliai | `mm × 12` |
 | Vėjas > 8 m/s | `(vėjas−8) × 4`, gūsiai > 14 m/s: dar −10 |
