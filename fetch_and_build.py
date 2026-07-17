@@ -130,6 +130,29 @@ def fetch_point(lat, lon):
             time.sleep(2 * (attempt + 1))
     raise RuntimeError(f"Open-Meteo nepavyko ({lat},{lon}): {last_err}")
 
+def fetch_model_runs():
+    """Kada paskutinį kartą inicializuotas kiekvienas modelis (best-effort)."""
+    paths = {"M": ["metno_nordic_pp", "metno_nordic", "met_no_nordic"],
+             "E": ["ecmwf_ifs025"],
+             "I": ["dwd_icon_eu"],
+             "G": ["ncep_gfs013", "ncep_gfs025"]}
+    runs = {}
+    for letter, cands in paths.items():
+        for p in cands:
+            try:
+                r = requests.get(f"https://api.open-meteo.com/data/{p}/static/meta.json",
+                                 timeout=15)
+                if r.status_code != 200:
+                    continue
+                ts = r.json().get("last_run_initialisation_time")
+                if isinstance(ts, (int, float)):
+                    runs[letter] = dt.datetime.fromtimestamp(ts, tz=OSLO)
+                    break
+            except Exception:
+                continue
+    return runs
+
+
 # ---------------------------------------------------------------- vertinimas
 
 def band_score(lclouds, mclouds, precip, wind, gust, rh, cbase, elev, fog=None):
@@ -275,7 +298,7 @@ def fmt_window(w, now):
 
 # ---------------------------------------------------------------- HTML
 
-def build_html(hikes_data, now, stale_note=""):
+def build_html(hikes_data, now, stale_note="", model_runs=None):
     base_name = "Ramberg" if now < BASE_SWITCH else "Reine"
     drive_key = "drive_from_ramberg_min" if now < BASE_SWITCH else "drive_from_reine_min"
 
@@ -301,30 +324,6 @@ def build_html(hikes_data, now, stale_note=""):
         return min((w["start"] for w in good), default=dt.datetime.max.replace(tzinfo=OSLO))
     active.sort(key=next_good)
 
-    # top blokas: geriausias langas artimiausiu 24h
-    soon, later = [], []
-    for h in active:
-        for w in h["windows"]:
-            if w["display"] < 60 or w["end"] <= now:
-                continue
-            (soon if w["start"] <= now + dt.timedelta(hours=24) else later).append((h, w))
-
-    if soon:
-        h, w = max(soon, key=lambda x: (x[1]["display"], -x[1]["start"].timestamp()))
-        v, _, _ = verdict(w["display"])
-        golden = " 🌅" if w["golden"] else ""
-        hero = (f"🏔️ <b>{h['hike']['name']}</b> — {fmt_window(w, now)}{golden} — "
-                f"score {w['display']} — <b>{v.split('—')[0].strip()}"
-                f"{', eikit!' if w['display'] >= 80 else ', verta!'}</b>")
-        hero_color = "#22c55e" if w["display"] >= 80 else "#86efac"
-    elif later:
-        h, w = min(later, key=lambda x: x[1]["start"])
-        hero = (f"Artimiausiu metu (24h) gerų langų nėra. Kitas kandidatas: "
-                f"<b>{h['hike']['name']}</b> — {fmt_window(w, now)} — score {w['display']}")
-        hero_color = "#facc15"
-    else:
-        hero = f"Prognozės ribose (iki {horizon_txt}) gerų langų nėra. Atnaujinam kas 3 val. 🤞"
-        hero_color = "#f87171"
 
     main_list = sorted((h for h in hikes_data if h["hike"].get("prio")),
                        key=lambda x: x["hike"]["prio"])
@@ -390,13 +389,29 @@ def build_html(hikes_data, now, stale_note=""):
         title_prefix = "✅ " if is_done else ("🌙 ŠĮVAKAR: " if is_tonight else "")
         cls = "card done" if is_done else "card"
         body = "" if is_done else badges + strip + note
+
+        # suskleistoje kortelėje — geriausio artėjančio lango ženkliukas
+        pill = ""
+        if not is_done:
+            best = max(top3, key=lambda w: w["display"], default=None)
+            if best:
+                _, fg, bg = verdict(best["display"])
+                pill = (f'<span class="pill" style="background:{bg};color:{fg}">'
+                        f'{fmt_window(best, now)} · {best["display"]}</span>')
+            else:
+                pill = '<span class="pill" style="background:#450a0a;color:#f87171">langų nėra</span>'
         cards.append(f"""
-    <div class="{cls}">
-      <div class="hname">{title_prefix}{hike['name']} <span class="meta">{hike['elev_m']} m · {hike['zone']} · 🚗 {hike[drive_key]} min nuo {base_name}</span></div>
+    <details class="{cls}">
+      <summary><span class="chev">▸</span><div class="hname">{title_prefix}{hike['name']} <span class="meta">{hike['elev_m']} m · {hike['zone']} · 🚗 {hike[drive_key]} min nuo {base_name}</span></div>{pill}</summary>
       {body}
-    </div>""")
+    </details>""")
 
     updated = now.strftime("%Y-%m-%d %H:%M")
+    runs_txt = ""
+    if model_runs:
+        runs_txt = ("<br>Modelių leidimai: "
+                    + " · ".join(f"{k} {v.strftime('%m-%d %H:%M')}"
+                                 for k, v in sorted(model_runs.items())))
     model_txt = "Open-Meteo · 4 modelių vidurkis: M=MEPS E=ECMWF I=ICON-EU G=GFS"
     stale_html = f'<div class="stale">⚠️ {stale_note}</div>' if stale_note else ""
 
@@ -410,10 +425,12 @@ def build_html(hikes_data, now, stale_note=""):
   body {{ margin:0; padding:16px; background:#0b1020; color:#e5e7eb;
          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
          font-size:18px; line-height:1.45; }}
-  .hero {{ background:#111a33; border:2px solid {hero_color}; border-radius:16px;
-           padding:18px; font-size:21px; margin-bottom:20px; }}
-  .hero-label {{ font-size:13px; letter-spacing:1px; color:#9ca3af; margin-bottom:6px; }}
   .card {{ background:#111a33; border-radius:14px; padding:14px 16px; margin-bottom:14px; }}
+  .card summary {{ cursor:pointer; list-style:none; }}
+  .card summary::-webkit-details-marker {{ display:none; }}
+  .chev {{ float:right; color:#9ca3af; transition:transform .15s; display:inline-block; }}
+  details[open] .chev {{ transform:rotate(90deg); }}
+  .pill {{ display:inline-block; border-radius:8px; padding:2px 10px; font-size:14px; margin-top:6px; }}
   .card.done {{ opacity:0.45; }}
   .hname {{ font-size:20px; font-weight:700; margin-bottom:8px; }}
   .meta {{ font-size:14px; font-weight:400; color:#9ca3af; display:block; margin-top:2px; }}
@@ -433,14 +450,10 @@ def build_html(hikes_data, now, stale_note=""):
 </head>
 <body>
   {stale_html}
-  <div class="hero">
-    <div class="hero-label">GERIAUSIAS ARTIMIAUSIAS LANGAS</div>
-    {hero}
-  </div>
   {''.join(cards)}
   <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: {model_txt} ·
   Score = viršūnės matomumo tikimybė · 🌅 = golden light · ☁ žemi debesys % · 🌧 mm · 💨 m/s ·
-  Prognozė siekia: {horizon_txt}</div>
+  Prognozė siekia: {horizon_txt}{runs_txt}</div>
 </body>
 </html>
 """
@@ -492,7 +505,13 @@ def main():
         print("Visi užklausimai nepavyko — paliktas senas puslapis su įspėjimu", file=sys.stderr)
         sys.exit(1)
 
-    html = build_html(hikes_data, now)
+    try:
+        model_runs = fetch_model_runs()
+        print("Modelių leidimai:", {k: v.strftime('%m-%d %H:%M') for k, v in model_runs.items()})
+    except Exception as e:
+        model_runs = None
+        print(f"Modelių meta nepavyko: {e}", file=sys.stderr)
+    html = build_html(hikes_data, now, model_runs=model_runs)
     write_html(html)
     print(f"Sugeneruota: {OUT_PATH} ir {ROOT_PATH}")
 
