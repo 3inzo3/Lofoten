@@ -290,6 +290,11 @@ def build_html(hikes_data, now, stale_note=""):
     base_name = "Ramberg" if now < BASE_SWITCH else "Reine"
     drive_key = "drive_from_ramberg_min" if now < BASE_SWITCH else "drive_from_reine_min"
 
+    # iki kada realiai siekia gauti duomenys (trial raktas duoda ~48-72h)
+    horizon = max((b["t"] + dt.timedelta(hours=3) for h in hikes_data
+                   for b in h.get("bands", [])), default=None)
+    horizon_txt = f"{day_label(horizon, now)} {horizon.strftime('%H:%M')}" if horizon else "—"
+
     # aktyvūs (planned/tonight) ir done
     active, done = [], []
     for h in hikes_data:
@@ -329,7 +334,7 @@ def build_html(hikes_data, now, stale_note=""):
                 f"<b>{h['hike']['name']}</b> — {fmt_window(w, now)} — score {w['display']}")
         hero_color = "#facc15"
     else:
-        hero = "Gerų langų iki išvykimo prognozė kol kas nerodo. Tikrinam kas 3 val. 🤞"
+        hero = f"Prognozės ribose (iki {horizon_txt}) gerų langų nėra. Atnaujinam kas 3 val. 🤞"
         hero_color = "#f87171"
 
     cards = []
@@ -429,7 +434,7 @@ def build_html(hikes_data, now, stale_note=""):
   </div>
   {''.join(cards)}
   <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: Windy {model_txt} ·
-  Score = viršūnės matomumo tikimybė · 🌅 = golden light langas</div>
+  Score = viršūnės matomumo tikimybė · 🌅 = golden light · Prognozė siekia: {horizon_txt}</div>
 </body>
 </html>
 """
