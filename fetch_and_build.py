@@ -331,7 +331,7 @@ def build_html(hikes_data, now, stale_note=""):
         if h.get("error"):
             badges = '<div class="win" style="background:#450a0a;color:#f87171">⚠️ nėra duomenų (API klaida)</div>'
         elif not top3 and not is_done:
-            badges = '<div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div>'
+            badges = f'<div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta (prognozė iki {horizon_txt})</div>'
         else:
             for w in top3:
                 v, fg, bg = verdict(w["display"])
@@ -418,7 +418,7 @@ def build_html(hikes_data, now, stale_note=""):
     {hero}
   </div>
   {''.join(cards)}
-  <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: Windy {model_txt} ·
+  <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: {model_txt} ·
   Score = viršūnės matomumo tikimybė · 🌅 = golden light · ☁ žemi debesys % · 🌧 mm · 💨 m/s ·
   Prognozė siekia: {horizon_txt}</div>
 </body>
