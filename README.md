@@ -1,7 +1,7 @@
 # 🏔️ Lofoten žygių langų radaras
 
 Automatiškai atsinaujinanti svetainė, rodanti geriausius žygių langus Lofotenuose
-pagal Windy (ECMWF) orų prognozę. Kas 3 valandas GitHub Actions atnaujina
+pagal Windy (ICON-EU, ~7 km) orų prognozę. Kas 3 valandas GitHub Actions atnaujina
 `docs/index.html` — svetainė rodo, **kada ir į kurią viršūnę verta eiti**, kad
 nuo viršaus matytųsi vaizdai.
 
@@ -47,7 +47,7 @@ Kiekvienai 3h prognozės juostai iki 2026-07-23 06:00:
 | Vėjas > 8 m/s | `(vėjas−8) × 4`, gūsiai > 14 m/s: dar −10 |
 | Rūko rizika (rh > 95 % ir lclouds > 60 %) | −25 |
 
-Jei ECMWF neduoda `cbase` — naudojamas proxy: `125 × (temp − dew_point)`.
+Jei modelis neduoda `cbase` — naudojamas proxy: `125 × (temp − dew_point)`.
 
 **Langas** = ≥2 iš eilės juostos su score ≥ 60. Langai 19:00–01:00 gauna 🌅
 golden light žymę (+5 rodomam score). Verdiktai: 80+ „PUIKUS", 60+ „GERAS",
