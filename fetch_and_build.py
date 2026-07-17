@@ -233,7 +233,7 @@ def parse_bands(data, elev, now):
 
 
 def find_windows(bands, golden_check):
-    """Langas = ištisinis laikotarpis su score >= 60, trunkantis >= 3 val."""
+    """Langas = ištisinis laikotarpis su score >= 50, trunkantis >= 3 val."""
     windows = []
     run = []
 
@@ -252,9 +252,9 @@ def find_windows(bands, golden_check):
     prev_end = None
     for b in bands:
         contiguous = prev_end is not None and b["t"] == prev_end
-        if b["score"] >= 60 and (not run or contiguous):
+        if b["score"] >= 50 and (not run or contiguous):
             run.append(b)
-        elif b["score"] >= 60:
+        elif b["score"] >= 50:
             flush()
             run.append(b)
         else:
@@ -279,8 +279,10 @@ def verdict(score):
         return "PUIKUS — eikit", "#22c55e", "#052e16"
     if score >= 60:
         return "GERAS — verta", "#86efac", "#14532d"
+    if score >= 50:
+        return "VERTA BANDYTI — 50/50", "#fde047", "#422006"
     if score >= 40:
-        return "RIZIKINGA — 50/50", "#facc15", "#422006"
+        return "RIZIKINGA", "#f59e0b", "#422006"
     return "NEVERTA — viršūnė debesyse", "#f87171", "#450a0a"
 
 # ---------------------------------------------------------------- formatavimas
@@ -299,9 +301,6 @@ def fmt_window(w, now):
 # ---------------------------------------------------------------- HTML
 
 def build_html(hikes_data, now, stale_note="", model_runs=None):
-    base_name = "Ramberg" if now < BASE_SWITCH else "Reine"
-    drive_key = "drive_from_ramberg_min" if now < BASE_SWITCH else "drive_from_reine_min"
-
     # iki kada realiai siekia gauti duomenys (trial raktas duoda ~48-72h)
     horizon = max((b["t"] + dt.timedelta(hours=b["dur"]) for h in hikes_data
                    for b in h.get("bands", [])), default=None)
@@ -403,7 +402,7 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
                 pill = '<span class="pill" style="background:#450a0a;color:#f87171">langų nėra</span>'
         cards.append(f"""
     <details class="{cls}">
-      <summary><span class="chev">▸</span><div class="hname">{title_prefix}{hike['name']} <span class="meta">{hike['elev_m']} m · {hike['zone']} · 🚗 {hike[drive_key]} min nuo {base_name}</span></div>{pill}</summary>
+      <summary><span class="chev">▸</span><div class="hname">{title_prefix}{hike['name']} <span class="meta">{hike['elev_m']} m · {hike['zone']}</span></div>{pill}</summary>
       {body}
     </details>""")
 
@@ -482,9 +481,10 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
     plunksniniai debesys nebaudžiami — jie tik gražina dangų.</p>
     <p><b>Spalvos:</b> <span style="color:#22c55e">≥80 PUIKUS</span> ·
     <span style="color:#86efac">60–79 GERAS</span> ·
-    <span style="color:#facc15">40–59 RIZIKINGA</span> ·
+    <span style="color:#fde047">50–59 VERTA BANDYTI</span> · <span style="color:#f59e0b">40–49 RIZIKINGA</span> ·
     <span style="color:#f87171">&lt;40 NEVERTA</span>.
-    <b>Langas</b> = ištisinis ≥3 val. periodas su score ≥60.</p>
+    <b>Langas</b> = ištisinis ≥3 val. periodas su score ≥50 —
+    nuo 50 jau verta bandyti (debesys Lofotenuose juda greitai).</p>
   </details>
   {''.join(cards)}
   <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: {model_txt} ·
