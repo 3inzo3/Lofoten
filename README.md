@@ -1,7 +1,7 @@
 # 🏔️ Lofoten žygių langų radaras
 
 Automatiškai atsinaujinanti svetainė, rodanti geriausius žygių langus Lofotenuose
-pagal Windy (ICON-EU, ~7 km) orų prognozę. Kas 3 valandas GitHub Actions atnaujina
+pagal MET Norway / yr.no (MEPS, 2.5 km) orų prognozę — valandinė raiška, be jokio API rakto. Kas 3 valandas GitHub Actions atnaujina
 `docs/index.html` — svetainė rodo, **kada ir į kurią viršūnę verta eiti**, kad
 nuo viršaus matytųsi vaizdai.
 
@@ -10,10 +10,8 @@ cloud base aukštis, lietus antraeilis. Aukšti debesys nebaudžiami (gražina d
 
 ## Setup — 5 žingsniai
 
-1. **Įdėk Windy API raktą kaip Secret.**
-   Repo puslapyje: *Settings → Secrets and variables → Actions → New repository
-   secret*. Pavadinimas: `WINDY_API_KEY`, reikšmė — tavo raktas iš
-   [api.windy.com](https://api.windy.com) (Point Forecast API, Premium).
+1. **API rakto nereikia** — duomenys iš [api.met.no](https://api.met.no)
+   (MET Norway locationforecast), nemokami, tik User-Agent identifikacija.
 
 2. **Įjunk GitHub Pages.**
    *Settings → Pages → Build and deployment*: Source = **Deploy from a branch**,
@@ -28,7 +26,7 @@ cloud base aukštis, lietus antraeilis. Aukšti debesys nebaudžiami (gražina d
    Pridėk į telefono Home Screen — atsidaro kaip app'as.
 
 5. **Viskas.** Toliau atsinaujina automatiškai kas 3 val. (cron `0 */3 * * *`).
-   Jei Windy API nulūžta — puslapis lieka senas su įspėjimu „DUOMENYS PASENĘ".
+   Jei yr.no API nulūžta — puslapis lieka senas su įspėjimu „DUOMENYS PASENĘ".
 
 > ⚠️ Cron veikia tik iš **default šakos** (main) — įsitikink, kad šie failai
 > yra main šakoje.
@@ -55,7 +53,7 @@ golden light žymę (+5 rodomam score). Verdiktai: 80+ „PUIKUS", 60+ „GERAS"
 
 ## Failai
 
-- `fetch_and_build.py` — traukia Windy API (16 taškų, ~128 req/parą, telpa į 1000/parą limitą), skaičiuoja, generuoja HTML
+- `fetch_and_build.py` — traukia yr.no API (16 taškų kas 3 val., gerokai žemiau MET Norway limitų), skaičiuoja, generuoja HTML
 - `.github/workflows/update.yml` — cron kas 3 val. + rankinis paleidimas
 - `docs/index.html` — sugeneruota svetainė (necommit'inti ranka)
 

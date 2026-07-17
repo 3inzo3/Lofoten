@@ -28,8 +28,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Traukti prognozę ir generuoti puslapį
-        env:
-          WINDY_API_KEY: ${{ secrets.WINDY_API_KEY }}
         run: python fetch_and_build.py
 
       - name: Commit ir push

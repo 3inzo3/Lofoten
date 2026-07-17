@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Lofoten Hike Window Finder
-Traukia Windy Point Forecast API prognozes 6 žygių taškams,
-skaičiuoja viršūnės matomumo score (0-100) kiekvienai 3h juostai,
-grupuoja į langus ir generuoja docs/index.html.
+Traukia MET Norway (yr.no) locationforecast prognozes žygių taškams,
+skaičiuoja viršūnės matomumo score (0-100) kiekvienai juostai (1h arti,
+6h toliau), grupuoja į langus ir generuoja docs/index.html.
 
-Paleidimas: WINDY_API_KEY=xxx python fetch_and_build.py
+Paleidimas: python fetch_and_build.py  (rakto nereikia)
 """
 
 import json
@@ -22,13 +22,10 @@ import requests
 # ---------------------------------------------------------------- konfigūracija
 
 OSLO = ZoneInfo("Europe/Oslo")
-API_URL = "https://api.windy.com/api/point-forecast/v2"
-# Trial/Premium raktai ECMWF neturi — ICON-EU (~7 km) geriausias prieinamas
-# modelis Norvegijai; jei jo nepriimtų, krentam į GFS.
-MODEL = "iconEu"
-FALLBACK_MODEL = "gfs"
-MODEL_LABELS = {"iconEu": "ICON-EU", "gfs": "GFS", "ecmwf": "ECMWF"}
-USED_MODELS = set()
+# MET Norway (yr.no) — nemokamas, be rakto; MEPS 2.5 km modelis Skandinavijai.
+# Būtinas identifikuojantis User-Agent pagal jų naudojimo taisykles.
+YR_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
+YR_UA = "LofotenHikeRadar/1.0 (+https://github.com/3inzo3/Lofoten)"
 _BASE = os.path.dirname(os.path.abspath(__file__))
 OUT_PATH = os.path.join(_BASE, "docs", "index.html")
 # Rašom ir į repo šaknį — tada Pages veikia nesvarbu, ar folderis / ar /docs
@@ -107,58 +104,26 @@ HIKES = [
 WEEKDAYS_LT = ["pirmadienis", "antradienis", "trečiadienis", "ketvirtadienis",
                "penktadienis", "šeštadienis", "sekmadienis"]
 
-# ---------------------------------------------------------------- Windy API
+# ---------------------------------------------------------------- yr.no API
 
-def fetch_point(lat, lon, api_key):
-    """Vienas POST vienam taškui. Grąžina žodyną su laiko eilutėmis arba meta išimtį.
-    400 atveju prisitaiko: keičia modelį į atsarginį, meta lauk nepalaikomus parametrus."""
-    params = ["temp", "dewpoint", "precip", "wind", "windGust",
-              "lclouds", "mclouds", "hclouds", "rh", "cbase"]
-    model = MODEL
+def fetch_point(lat, lon):
+    """GET vienam taškui iš MET Norway. Grąžina locationforecast JSON."""
     last_err = None
-    for attempt in range(5):
-        payload = {"lat": round(lat, 4), "lon": round(lon, 4), "model": model,
-                   "parameters": params, "levels": ["surface"], "key": api_key}
+    for attempt in range(4):
         try:
-            r = requests.post(API_URL, json=payload, timeout=30)
-            if r.status_code == 400:
-                if "model must be" in r.text and model != FALLBACK_MODEL:
-                    model = FALLBACK_MODEL
-                    continue
-                bad = [p for p in params if p in r.text]
-                if bad and len(bad) < len(params):
-                    params = [p for p in params if p not in bad]
-                    continue
+            r = requests.get(YR_URL, params={"lat": round(lat, 4), "lon": round(lon, 4)},
+                             headers={"User-Agent": YR_UA}, timeout=30)
             if r.status_code >= 400:
-                # įtraukiam atsakymo tekstą — kitaip logai nieko nepasako
-                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
-            USED_MODELS.add(model)
+                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
             return r.json()
         except Exception as e:  # tinklo/API klaida — retry su pauze
             last_err = e
             time.sleep(2 * (attempt + 1))
-    raise RuntimeError(f"Windy API nepavyko ({lat},{lon}): {last_err}")
-
-
-def series(data, name):
-    """Ištraukia parametro masyvą ('temp' -> 'temp-surface')."""
-    for key in (f"{name}-surface", name):
-        if key in data:
-            return data[key]
-    return None
-
-
-def to_celsius(values, units):
-    if values is None:
-        return None
-    unit = (units or {}).get("temp-surface", "")
-    if unit == "K" or (values and values[0] is not None and values[0] > 150):
-        return [None if v is None else v - 273.15 for v in values]
-    return values
+    raise RuntimeError(f"yr.no API nepavyko ({lat},{lon}): {last_err}")
 
 # ---------------------------------------------------------------- vertinimas
 
-def band_score(lclouds, mclouds, precip, wind, gust, rh, cbase, elev):
+def band_score(lclouds, mclouds, precip, wind, gust, rh, cbase, elev, fog=None):
     """View Score 0-100: viršūnės matomumo tikimybė. hclouds nebaudžiami."""
     score = 100.0
     low = lclouds or 0
@@ -176,75 +141,77 @@ def band_score(lclouds, mclouds, precip, wind, gust, rh, cbase, elev):
         score -= (wind - 8) * 4
     if gust is not None and gust > 14:
         score -= 10
-    if rh is not None and lclouds is not None and rh > 95 and lclouds > 60:
+    if fog is not None:
+        if fog > 40:
+            score -= 25
+    elif rh is not None and lclouds is not None and rh > 95 and lclouds > 60:
         score -= 25
     return max(0.0, min(100.0, score))
 
 
 def parse_bands(data, elev, now):
-    """API atsakymą paverčia į [{t, score}, ...] 3h juostas iki DEADLINE."""
-    ts = data.get("ts") or []
-    units = data.get("units") or {}
-    temp = to_celsius(series(data, "temp"), units)
-    dew = to_celsius(series(data, "dewpoint"), units)
-    lcl = series(data, "lclouds")
-    mcl = series(data, "mclouds")
-    rh = series(data, "rh")
-    gust = series(data, "gust") or series(data, "windGust")
-    cbase = series(data, "cbase")
-    precip = series(data, "past3hprecip") or series(data, "precip")
-    wu = series(data, "wind_u")
-    wv = series(data, "wind_v")
-
-    def at(arr, i):
-        return arr[i] if arr is not None and i < len(arr) else None
-
+    """yr.no atsakymą paverčia į [{t, dur, score, ...}] juostas (1h arti, 6h toliau)."""
+    entries = (data.get("properties") or {}).get("timeseries") or []
     bands = []
-    for i, ms in enumerate(ts):
-        t = dt.datetime.fromtimestamp(ms / 1000, tz=OSLO)
-        if t < now - dt.timedelta(hours=3) or t < DISPLAY_FROM or t >= DEADLINE:
+    for e in entries:
+        t = dt.datetime.fromisoformat(e["time"].replace("Z", "+00:00")).astimezone(OSLO)
+        if t < now - dt.timedelta(hours=1) or t < DISPLAY_FROM or t >= DEADLINE:
             continue
-        u, v = at(wu, i), at(wv, i)
-        wind = math.sqrt(u * u + v * v) if u is not None and v is not None else None
+        d = e.get("data") or {}
+        inst = (d.get("instant") or {}).get("details") or {}
+        if "next_1_hours" in d:
+            dur, nxt = 1, d["next_1_hours"]
+        elif "next_6_hours" in d:
+            dur, nxt = 6, d["next_6_hours"]
+        else:
+            continue
+        pr = (nxt.get("details") or {}).get("precipitation_amount") or 0.0
+        precip3h = pr * 3.0 if dur == 1 else pr / 2.0  # normuojam į mm/3h intensyvumą
 
-        cb = at(cbase, i)
-        if cb is None:
-            # proxy: cloud base ~ 125 m * (T - Td); be dew point — vertinam iš rh
-            t_c, d_c, rh_i = at(temp, i), at(dew, i), at(rh, i)
-            if t_c is not None and d_c is not None:
-                cb = max(0.0, 125.0 * (t_c - d_c))
-            elif t_c is not None and rh_i is not None:
-                cb = max(0.0, 125.0 * (100.0 - rh_i) / 5.0)
+        lcl = inst.get("cloud_area_fraction_low")
+        mcl = inst.get("cloud_area_fraction_medium")
+        rh = inst.get("relative_humidity")
+        fog = inst.get("fog_area_fraction")
+        wind = inst.get("wind_speed")
+        gust = inst.get("wind_speed_of_gust")
+        t_c = inst.get("air_temperature")
+        d_c = inst.get("dew_point_temperature")
+
+        # cloud base proxy: ~125 m × (T − Td); be dew point — įvertis iš rh
+        cb = None
+        if t_c is not None and d_c is not None:
+            cb = max(0.0, 125.0 * (t_c - d_c))
+        elif t_c is not None and rh is not None:
+            cb = max(0.0, 125.0 * (100.0 - rh) / 5.0)
 
         bands.append({
-            "t": t,
-            "score": band_score(at(lcl, i), at(mcl, i), at(precip, i),
-                                wind, at(gust, i), at(rh, i), cb, elev),
-            "lcl": at(lcl, i),
-            "precip": at(precip, i),
-            "wind": wind,
+            "t": t, "dur": dur,
+            "score": band_score(lcl, mcl, precip3h, wind, gust, rh, cb, elev, fog),
+            "lcl": lcl, "precip": pr, "wind": wind,
         })
     return bands
 
 
 def find_windows(bands, golden_check):
-    """Langas = >=2 iš eilės 3h juostos su score >= 60. Grąžina visų langų sąrašą."""
+    """Langas = ištisinis laikotarpis su score >= 60, trunkantis >= 3 val."""
     windows = []
     run = []
+
     def flush():
-        if len(run) >= 2:
+        if run:
             start = run[0]["t"]
-            end = run[-1]["t"] + dt.timedelta(hours=3)
-            avg = sum(b["score"] for b in run) / len(run)
-            golden = golden_check(start, end)
-            disp = min(100, round(avg) + (5 if golden else 0))
-            windows.append({"start": start, "end": end, "avg": round(avg),
-                            "display": disp, "golden": golden})
+            end = run[-1]["t"] + dt.timedelta(hours=run[-1]["dur"])
+            if end - start >= dt.timedelta(hours=3):
+                avg = sum(b["score"] for b in run) / len(run)
+                golden = golden_check(start, end)
+                disp = min(100, round(avg) + (5 if golden else 0))
+                windows.append({"start": start, "end": end, "avg": round(avg),
+                                "display": disp, "golden": golden})
         run.clear()
 
-    prev_t = None
+    prev_end = None
     for b in bands:
-        contiguous = prev_t is not None and (b["t"] - prev_t) == dt.timedelta(hours=3)
+        contiguous = prev_end is not None and b["t"] == prev_end
         if b["score"] >= 60 and (not run or contiguous):
             run.append(b)
         elif b["score"] >= 60:
@@ -252,7 +219,7 @@ def find_windows(bands, golden_check):
             run.append(b)
         else:
             flush()
-        prev_t = b["t"]
+        prev_end = b["t"] + dt.timedelta(hours=b["dur"])
     flush()
     return windows
 
@@ -296,7 +263,7 @@ def build_html(hikes_data, now, stale_note=""):
     drive_key = "drive_from_ramberg_min" if now < BASE_SWITCH else "drive_from_reine_min"
 
     # iki kada realiai siekia gauti duomenys (trial raktas duoda ~48-72h)
-    horizon = max((b["t"] + dt.timedelta(hours=3) for h in hikes_data
+    horizon = max((b["t"] + dt.timedelta(hours=b["dur"]) for h in hikes_data
                    for b in h.get("bands", [])), default=None)
     horizon_txt = f"{day_label(horizon, now)} {horizon.strftime('%H:%M')}" if horizon else "—"
 
@@ -378,7 +345,7 @@ def build_html(hikes_data, now, stale_note=""):
         if not is_done:
             days = {}
             for b in h.get("bands", []):
-                if b["t"] + dt.timedelta(hours=3) <= now or b["t"] > now + dt.timedelta(hours=48):
+                if b["t"] + dt.timedelta(hours=b["dur"]) <= now or b["t"] > now + dt.timedelta(hours=48):
                     continue
                 days.setdefault(b["t"].date(), []).append(b)
             for day, bs in sorted(days.items()):
@@ -411,7 +378,7 @@ def build_html(hikes_data, now, stale_note=""):
     </div>""")
 
     updated = now.strftime("%Y-%m-%d %H:%M")
-    model_txt = "/".join(sorted(MODEL_LABELS.get(m, m) for m in USED_MODELS)) or "—"
+    model_txt = "yr.no · MET Norway (MEPS 2.5 km)"
     stale_html = f'<div class="stale">⚠️ {stale_note}</div>' if stale_note else ""
 
     return f"""<!DOCTYPE html>
@@ -452,7 +419,7 @@ def build_html(hikes_data, now, stale_note=""):
   </div>
   {''.join(cards)}
   <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: Windy {model_txt} ·
-  Score = viršūnės matomumo tikimybė · 🌅 = golden light · ☁ žemi debesys % · 🌧 mm/3h · 💨 m/s ·
+  Score = viršūnės matomumo tikimybė · 🌅 = golden light · ☁ žemi debesys % · 🌧 mm · 💨 m/s ·
   Prognozė siekia: {horizon_txt}</div>
 </body>
 </html>
@@ -480,12 +447,6 @@ def mark_stale(reason):
 # ---------------------------------------------------------------- main
 
 def main():
-    api_key = os.environ.get("WINDY_API_KEY", "").strip()
-    if not api_key:
-        print("KLAIDA: nėra WINDY_API_KEY aplinkos kintamojo", file=sys.stderr)
-        mark_stale("nėra API rakto")
-        sys.exit(1)
-
     now = dt.datetime.now(OSLO)
     hikes_data = []
     failures = 0
@@ -494,7 +455,7 @@ def main():
             hikes_data.append({"hike": hike, "windows": [], "error": False})
             continue
         try:
-            data = fetch_point(hike["lat"], hike["lon"], api_key)
+            data = fetch_point(hike["lat"], hike["lon"])
             bands = parse_bands(data, hike["elev_m"], now)
             windows = find_windows(bands, is_golden)
             hikes_data.append({"hike": hike, "windows": windows, "bands": bands,
@@ -507,7 +468,7 @@ def main():
 
     active_count = sum(1 for h in HIKES if h["status"] != "done")
     if failures == active_count:
-        mark_stale("Windy API nepasiekiamas")
+        mark_stale("yr.no API nepasiekiamas")
         print("Visi užklausimai nepavyko — paliktas senas puslapis su įspėjimu", file=sys.stderr)
         sys.exit(1)
 
