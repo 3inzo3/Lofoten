@@ -51,6 +51,39 @@ HIKES = [
     {"id": 6, "name": "Reinebringen", "elev_m": 448, "lat": 67.9223, "lon": 13.0784,
      "zone": "Reine", "drive_from_ramberg_min": 40, "drive_from_reine_min": 5,
      "status": "tonight", "note": "šįvakar 07-17 naktį, sherpa laiptai"},
+    {"id": 7, "name": "Mannen", "elev_m": 400, "lat": 68.2020, "lon": 13.5200,
+     "zone": "Haukland", "drive_from_ramberg_min": 40, "drive_from_reine_min": 70,
+     "status": "planned", "note": "Haukland/Uttakleiv paplūdimių vaizdai, lengvas"},
+    {"id": 8, "name": "Himmeltindan", "elev_m": 962, "lat": 68.1680, "lon": 13.4700,
+     "zone": "Haukland", "drive_from_ramberg_min": 40, "drive_from_reine_min": 70,
+     "status": "planned", "note": "aukščiausia Vestvågøy viršūnė, rimtas žygis"},
+    {"id": 9, "name": "Justadtinden", "elev_m": 738, "lat": 68.1960, "lon": 13.8700,
+     "zone": "Leknes", "drive_from_ramberg_min": 50, "drive_from_reine_min": 80,
+     "status": "planned", "note": "360° panorama, nuo Hagskaret"},
+    {"id": 10, "name": "Nonstinden", "elev_m": 457, "lat": 68.0800, "lon": 13.5600,
+     "zone": "Ballstad", "drive_from_ramberg_min": 40, "drive_from_reine_min": 70,
+     "status": "planned", "note": "Ballstad fjordų vaizdai"},
+    {"id": 11, "name": "Stornappstinden", "elev_m": 740, "lat": 68.0800, "lon": 13.4150,
+     "zone": "Napp", "drive_from_ramberg_min": 20, "drive_from_reine_min": 50,
+     "status": "planned", "note": "Flakstadøya panorama"},
+    {"id": 12, "name": "Nubben", "elev_m": 380, "lat": 68.0970, "lon": 13.2640,
+     "zone": "Ramberg", "drive_from_ramberg_min": 5, "drive_from_reine_min": 35,
+     "status": "planned", "note": "trumpas vakarinis, Ramberg paplūdimio vaizdas"},
+    {"id": 13, "name": "Munkebu / Munken", "elev_m": 775, "lat": 67.9180, "lon": 12.9800,
+     "zone": "Sørvågen", "drive_from_ramberg_min": 45, "drive_from_reine_min": 10,
+     "status": "planned", "note": "ežerai + Reinefjord vaizdai, ~6-7 h"},
+    {"id": 14, "name": "Hermannsdalstinden", "elev_m": 1029, "lat": 67.9300, "lon": 12.9280,
+     "zone": "Sørvågen", "drive_from_ramberg_min": 45, "drive_from_reine_min": 10,
+     "status": "planned", "note": "aukščiausia Moskenesøya, ilgas ~8-10 h"},
+    {"id": 15, "name": "Helvetestinden", "elev_m": 602, "lat": 67.9750, "lon": 12.9350,
+     "zone": "Bunes", "drive_from_ramberg_min": 40, "drive_from_reine_min": 5,
+     "status": "planned", "note": "reikia kelto iš Reine į Vindstad, Bunes paplūdimys"},
+    {"id": 16, "name": "Hoven", "elev_m": 368, "lat": 68.3300, "lon": 14.1200,
+     "zone": "Gimsøya", "drive_from_ramberg_min": 70, "drive_from_reine_min": 100,
+     "status": "planned", "note": "lengvas, vidurnakčio saulės klasika"},
+    {"id": 17, "name": "Tjeldbergtinden", "elev_m": 367, "lat": 68.2220, "lon": 14.5120,
+     "zone": "Svolvær", "drive_from_ramberg_min": 75, "drive_from_reine_min": 105,
+     "status": "planned", "note": "trumpas, Svolvær/Kabelvåg vaizdai"},
 ]
 
 WEEKDAYS_LT = ["pirmadienis", "antradienis", "trečiadienis", "ketvirtadienis",
@@ -300,8 +333,11 @@ def build_html(hikes_data, now, stale_note=""):
                            f'<b>{fmt_window(w, now)}</b>{golden} · score {w["display"]} · {v}</div>')
 
         note = ""
-        if hike["name"] == "Ryten" and not is_done:
-            note = '<div class="note">💡 geriausia vakare (sunset virš Kvalvika)</div>'
+        if not is_done:
+            if hike["name"] == "Ryten":
+                note = '<div class="note">💡 geriausia vakare (sunset virš Kvalvika)</div>'
+            elif hike.get("note"):
+                note = f'<div class="note">💡 {hike["note"]}</div>'
 
         title_prefix = "✅ " if is_done else ("🌙 ŠĮVAKAR: " if is_tonight else "")
         cls = "card done" if is_done else "card"

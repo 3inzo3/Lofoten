@@ -55,7 +55,7 @@ golden light žymę (+5 rodomam score). Verdiktai: 80+ „PUIKUS", 60+ „GERAS"
 
 ## Failai
 
-- `fetch_and_build.py` — traukia Windy API (6 taškai, ~48 req/parą, telpa į limitą), skaičiuoja, generuoja HTML
+- `fetch_and_build.py` — traukia Windy API (16 taškų, ~128 req/parą, telpa į 1000/parą limitą), skaičiuoja, generuoja HTML
 - `.github/workflows/update.yml` — cron kas 3 val. + rankinis paleidimas
 - `docs/index.html` — sugeneruota svetainė (necommit'inti ranka)
 
