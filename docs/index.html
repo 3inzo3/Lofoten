@@ -9,14 +9,95 @@
          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
          font-size:18px; line-height:1.45; }
   .hero { background:#111a33; border:2px solid #facc15; border-radius:16px;
-          padding:18px; font-size:21px; margin-bottom:20px; }
+           padding:18px; font-size:21px; margin-bottom:20px; }
+  .hero-label { font-size:13px; letter-spacing:1px; color:#9ca3af; margin-bottom:6px; }
+  .card { background:#111a33; border-radius:14px; padding:14px 16px; margin-bottom:14px; }
+  .card.done { opacity:0.45; }
+  .hname { font-size:20px; font-weight:700; margin-bottom:8px; }
+  .meta { font-size:14px; font-weight:400; color:#9ca3af; display:block; margin-top:2px; }
+  .win { border-radius:10px; padding:8px 12px; margin:6px 0; font-size:16px; }
+  .note { font-size:14px; color:#fbbf24; margin-top:6px; }
+  .stale { background:#7f1d1d; color:#fecaca; border-radius:10px; padding:10px 14px;
+            margin-bottom:16px; font-size:16px; }
+  .footer { margin-top:24px; font-size:12px; color:#6b7280; text-align:center; }
 </style>
 </head>
 <body>
-  <div class="stale" style="background:#7f1d1d;color:#fecaca;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:16px">⚠️ DUOMENYS PASENĘ — nepavyko atnaujinti prognozės</div>
+  
   <div class="hero">
-    ⏳ Laukiama pirmo atnaujinimo. Paleisk workflow: <b>Actions → „Atnaujinti
-    prognozę" → Run workflow</b> (reikia WINDY_API_KEY secret'o).
+    <div class="hero-label">GERIAUSIAS ARTIMIAUSIAS LANGAS</div>
+    Artimiausiu metu (24h) gerų langų nėra. Kitas kandidatas: <b>Nonstinden</b> — 07-19 (sekmadienis) 14:00–20:00 — score 66
   </div>
+  
+    <div class="card">
+      <div class="hname">Nonstinden <span class="meta">457 m · Ballstad · 🚗 40 min nuo Ramberg</span></div>
+      <div class="win" style="background:#14532d;color:#86efac"><b>07-19 (sekmadienis) 14:00–20:00</b> 🌅 · score 66 · GERAS — verta</div><div class="note">💡 Ballstad fjordų vaizdai</div>
+    </div>
+    <div class="card">
+      <div class="hname">Festvågtinden <span class="meta">541 m · Henningsvær · 🚗 60 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 virš Henningsvær stadiono</div>
+    </div>
+    <div class="card">
+      <div class="hname">Fløya <span class="meta">590 m · Svolvær · 🚗 80 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 Djevelporten</div>
+    </div>
+    <div class="card">
+      <div class="hname">Volandstinden <span class="meta">457 m · Fredvang · 🚗 10 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 Shark Fin, Fredvang tiltai</div>
+    </div>
+    <div class="card">
+      <div class="hname">Ryten <span class="meta">543 m · Fredvang · 🚗 20 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 geriausia vakare (sunset virš Kvalvika)</div>
+    </div>
+    <div class="card">
+      <div class="hname">🌙 ŠĮVAKAR: Reinebringen <span class="meta">448 m · Reine · 🚗 40 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 šįvakar 07-17 naktį, sherpa laiptai</div>
+    </div>
+    <div class="card">
+      <div class="hname">Mannen <span class="meta">400 m · Haukland · 🚗 40 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 Haukland/Uttakleiv paplūdimių vaizdai, lengvas</div>
+    </div>
+    <div class="card">
+      <div class="hname">Himmeltindan <span class="meta">962 m · Haukland · 🚗 40 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 aukščiausia Vestvågøy viršūnė, rimtas žygis</div>
+    </div>
+    <div class="card">
+      <div class="hname">Justadtinden <span class="meta">738 m · Leknes · 🚗 50 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 360° panorama, nuo Hagskaret</div>
+    </div>
+    <div class="card">
+      <div class="hname">Stornappstinden <span class="meta">740 m · Napp · 🚗 20 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 Flakstadøya panorama</div>
+    </div>
+    <div class="card">
+      <div class="hname">Nubben <span class="meta">380 m · Ramberg · 🚗 5 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 trumpas vakarinis, Ramberg paplūdimio vaizdas</div>
+    </div>
+    <div class="card">
+      <div class="hname">Munkebu / Munken <span class="meta">775 m · Sørvågen · 🚗 45 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 ežerai + Reinefjord vaizdai, ~6-7 h</div>
+    </div>
+    <div class="card">
+      <div class="hname">Hermannsdalstinden <span class="meta">1029 m · Sørvågen · 🚗 45 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 aukščiausia Moskenesøya, ilgas ~8-10 h</div>
+    </div>
+    <div class="card">
+      <div class="hname">Helvetestinden <span class="meta">602 m · Bunes · 🚗 40 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 reikia kelto iš Reine į Vindstad, Bunes paplūdimys</div>
+    </div>
+    <div class="card">
+      <div class="hname">Hoven <span class="meta">368 m · Gimsøya · 🚗 70 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 lengvas, vidurnakčio saulės klasika</div>
+    </div>
+    <div class="card">
+      <div class="hname">Tjeldbergtinden <span class="meta">367 m · Svolvær · 🚗 75 min nuo Ramberg</span></div>
+      <div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta iki 07-23</div><div class="note">💡 trumpas, Svolvær/Kabelvåg vaizdai</div>
+    </div>
+    <div class="card done">
+      <div class="hname">✅ Offersøykammen <span class="meta">436 m · Leknes · 🚗 30 min nuo Ramberg</span></div>
+      
+    </div>
+  <div class="footer">Atnaujinta: 2026-07-17 15:20 (Oslo laiku) · Duomenys: Windy ICON-EU ·
+  Score = viršūnės matomumo tikimybė · 🌅 = golden light langas</div>
 </body>
 </html>
