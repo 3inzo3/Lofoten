@@ -344,15 +344,15 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
 
         badges = ""
         if h.get("error"):
-            badges = '<div class="win" style="background:#450a0a;color:#f87171">⚠️ nėra duomenų (API klaida)</div>'
+            badges = '<div class="win"><span style="color:#f87171">⚠️ nėra duomenų (API klaida)</span></div>'
         elif not top3 and not is_done:
-            badges = f'<div class="win" style="background:#450a0a;color:#f87171">😕 gerų langų nerasta (prognozė iki {horizon_txt})</div>'
+            badges = f'<div class="win"><span style="color:#f87171">😕 gerų langų nerasta (prognozė iki {horizon_txt})</span></div>'
         else:
             for w in top3:
-                v, fg, bg = verdict(w["display"])
+                v, fg, _ = verdict(w["display"])
                 golden = " 🌅" if w["golden"] else ""
-                badges += (f'<div class="win" style="background:{bg};color:{fg}">'
-                           f'<b>{fmt_window(w, now)}</b>{golden} · score {w["display"]} · {v}</div>')
+                badges += (f'<div class="win"><b>{fmt_window(w, now)}</b>{golden} · '
+                           f'<b style="color:{fg}">score {w["display"]} · {v}</b></div>')
 
         # Juostelė iki pat išvykimo: kiekvienos valandos score,
         # sugrupuota pagal dienas — matosi ir tarpiniai 40-59 ("rizikinga")
@@ -395,11 +395,11 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
         if not is_done:
             best = max(top3, key=lambda w: w["display"], default=None)
             if best:
-                _, fg, bg = verdict(best["display"])
-                pill = (f'<span class="pill" style="background:{bg};color:{fg}">'
-                        f'{fmt_window(best, now)} · {best["display"]}</span>')
+                _, fg, _ = verdict(best["display"])
+                pill = (f'<span class="pill">{fmt_window(best, now)} · '
+                        f'<b style="color:{fg}">{best["display"]}</b></span>')
             else:
-                pill = '<span class="pill" style="background:#450a0a;color:#f87171">langų nėra</span>'
+                pill = '<span class="pill"><span style="color:#f87171">langų nėra</span></span>'
         cards.append(f"""
     <details class="{cls}">
       <summary><span class="chev">▸</span><div class="hname">{title_prefix}{hike['name']} <span class="meta">{hike['elev_m']} m · {hike['zone']}</span></div>{pill}</summary>
@@ -440,11 +440,13 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
   .card summary::-webkit-details-marker {{ display:none; }}
   .chev {{ float:right; color:#9ca3af; transition:transform .15s; display:inline-block; }}
   details[open] .chev {{ transform:rotate(90deg); }}
-  .pill {{ display:inline-block; border-radius:8px; padding:2px 10px; font-size:14px; margin-top:6px; }}
+  .pill {{ display:inline-block; border-radius:8px; padding:2px 10px; font-size:14px;
+           margin-top:6px; background:#182142; color:#94a3b8; }}
   .card.done {{ opacity:0.45; }}
   .hname {{ font-size:20px; font-weight:700; margin-bottom:8px; }}
   .meta {{ font-size:14px; font-weight:400; color:#9ca3af; display:block; margin-top:2px; }}
-  .win {{ border-radius:10px; padding:8px 12px; margin:6px 0; font-size:16px; }}
+  .win {{ border-radius:10px; padding:8px 12px; margin:6px 0; font-size:16px;
+         background:#182142; color:#e5e7eb; }}
   .note {{ font-size:14px; color:#fbbf24; margin-top:6px; }}
   .striplbl {{ font-size:12px; color:#9ca3af; margin-top:8px; }}
   .strip {{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }}
