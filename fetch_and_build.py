@@ -29,7 +29,17 @@ MODEL = "iconEu"
 FALLBACK_MODEL = "gfs"
 MODEL_LABELS = {"iconEu": "ICON-EU", "gfs": "GFS", "ecmwf": "ECMWF"}
 USED_MODELS = set()
-OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs", "index.html")
+_BASE = os.path.dirname(os.path.abspath(__file__))
+OUT_PATH = os.path.join(_BASE, "docs", "index.html")
+# Rašom ir į repo šaknį — tada Pages veikia nesvarbu, ar folderis / ar /docs
+ROOT_PATH = os.path.join(_BASE, "index.html")
+
+
+def write_html(html):
+    for path in (OUT_PATH, ROOT_PATH):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
 
 # Skrendam 07-23 ryte — po šio laiko langų neberodom
 DEADLINE = dt.datetime(2026, 7, 23, 6, 0, tzinfo=OSLO)
@@ -407,9 +417,7 @@ def mark_stale(reason):
         html = build_html([{"hike": h, "windows": [], "error": True} for h in HIKES],
                           dt.datetime.now(OSLO),
                           stale_note=f"Nepavyko gauti duomenų: {reason}")
-        os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-        with open(OUT_PATH, "w", encoding="utf-8") as f:
-            f.write(html)
+        write_html(html)
         return
     with open(OUT_PATH, encoding="utf-8") as f:
         html = f.read()
@@ -418,8 +426,7 @@ def mark_stale(reason):
             '⚠️ DUOMENYS PASENĘ — nepavyko atnaujinti prognozės</div>')
     if "DUOMENYS PASENĘ" not in html:
         html = html.replace("<body>", "<body>\n  " + warn, 1)
-        with open(OUT_PATH, "w", encoding="utf-8") as f:
-            f.write(html)
+    write_html(html)
 
 # ---------------------------------------------------------------- main
 
@@ -455,10 +462,8 @@ def main():
         sys.exit(1)
 
     html = build_html(hikes_data, now)
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"Sugeneruota: {OUT_PATH}")
+    write_html(html)
+    print(f"Sugeneruota: {OUT_PATH} ir {ROOT_PATH}")
 
 
 if __name__ == "__main__":
