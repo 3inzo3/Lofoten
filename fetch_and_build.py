@@ -218,6 +218,9 @@ def parse_bands(data, elev, now):
             "t": t,
             "score": band_score(at(lcl, i), at(mcl, i), at(precip, i),
                                 wind, at(gust, i), at(rh, i), cb, elev),
+            "lcl": at(lcl, i),
+            "precip": at(precip, i),
+            "wind": wind,
         })
     return bands
 
@@ -373,8 +376,15 @@ def build_html(hikes_data, now, stale_note=""):
                 cells = ""
                 for b in bs:
                     _, fg, bg = verdict(b["score"])
+                    # priežastys po score: žemi debesys visada, lietus/vėjas kai reikšmingi
+                    why = f'☁{round(b.get("lcl") or 0)}%'
+                    if (b.get("precip") or 0) >= 0.1:
+                        why += f' 🌧{b["precip"]:.1f}'
+                    if (b.get("wind") or 0) > 8:
+                        why += f' 💨{round(b["wind"])}'
                     cells += (f'<span class="b" style="background:{bg};color:{fg}">'
-                              f'{b["t"].strftime("%H:%M")}<br><b>{round(b["score"])}</b></span>')
+                              f'{b["t"].strftime("%H:%M")}<br><b>{round(b["score"])}</b>'
+                              f'<br><span class="x">{why}</span></span>')
                 lbl = day_label(bs[0]["t"], now).capitalize()
                 strip += f'<div class="striplbl">{lbl}</div><div class="strip">{cells}</div>'
 
@@ -419,8 +429,9 @@ def build_html(hikes_data, now, stale_note=""):
   .note {{ font-size:14px; color:#fbbf24; margin-top:6px; }}
   .striplbl {{ font-size:12px; color:#9ca3af; margin-top:8px; }}
   .strip {{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }}
-  .b {{ border-radius:6px; padding:3px 7px; font-size:13px; line-height:1.2;
-       text-align:center; min-width:30px; }}
+  .b {{ border-radius:6px; padding:3px 7px; font-size:13px; line-height:1.25;
+       text-align:center; min-width:44px; }}
+  .x {{ font-size:10px; opacity:0.85; }}
   .stale {{ background:#7f1d1d; color:#fecaca; border-radius:10px; padding:10px 14px;
             margin-bottom:16px; font-size:16px; }}
   .footer {{ margin-top:24px; font-size:12px; color:#6b7280; text-align:center; }}
@@ -434,7 +445,8 @@ def build_html(hikes_data, now, stale_note=""):
   </div>
   {''.join(cards)}
   <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: Windy {model_txt} ·
-  Score = viršūnės matomumo tikimybė · 🌅 = golden light · Prognozė siekia: {horizon_txt}</div>
+  Score = viršūnės matomumo tikimybė · 🌅 = golden light · ☁ žemi debesys % · 🌧 mm/3h · 💨 m/s ·
+  Prognozė siekia: {horizon_txt}</div>
 </body>
 </html>
 """
