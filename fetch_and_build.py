@@ -42,6 +42,16 @@ def write_html(html):
         with open(path, "w", encoding="utf-8") as f:
             f.write(html)
 
+
+MAP_PATHS = (os.path.join(_BASE, "docs", "map.html"), os.path.join(_BASE, "map.html"))
+
+
+def write_map(html):
+    for path in MAP_PATHS:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
+
 # Skrendam 07-23 ryte — po šio laiko langų neberodom
 DEADLINE = dt.datetime(2026, 7, 23, 6, 0, tzinfo=OSLO)
 # Langai rodomi tik nuo šio laiko (ankstesni intervalai nebeaktualūs)
@@ -431,6 +441,7 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
              margin-bottom:12px; }}
   .refresh {{ background:#2563eb; color:#fff; border:none; border-radius:10px;
               padding:12px 18px; font-size:16px; font-weight:600; }}
+  .maplink {{ background:#334155; text-decoration:none; margin-left:8px; }}
   .upd {{ font-size:14px; color:#9ca3af; }}
   .legend {{ background:#111a33; border-radius:12px; padding:12px 14px;
              margin-bottom:16px; font-size:14px; color:#cbd5e1; }}
@@ -469,6 +480,7 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
   {stale_html}
   <div class="topbar">
     <button class="refresh" onclick="location.href=location.pathname+'?r='+Date.now()">🔄 Atnaujinti</button>
+    <a class="refresh maplink" href="map.html">🗺️ Žemėlapis</a>
     <span class="upd">Atnaujinta {updated_short}</span>
   </div>
   <details class="legend">
@@ -499,6 +511,87 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
 </body>
 </html>
 """
+
+def build_map_html(hikes_data, now):
+    """Žemėlapis su laiko slankikliu: viršūnės spalvinamos pagal score."""
+    active = [h for h in hikes_data if h["hike"]["status"] != "done" and h.get("bands")]
+    all_times = sorted({b["t"] for h in active for b in h["bands"]})
+    idx = {t: i for i, t in enumerate(all_times)}
+    labels = [f"{day_label(t, now).capitalize()} {t.strftime('%H:%M')}" for t in all_times]
+    hikes_js = []
+    for h in active:
+        scores = [None] * len(all_times)
+        for b in h["bands"]:
+            scores[idx[b["t"]]] = round(b["score"])
+        hikes_js.append({"n": h["hike"]["name"], "e": h["hike"]["elev_m"],
+                         "la": h["hike"]["lat"], "lo": h["hike"]["lon"], "s": scores})
+    data = json.dumps({"times": labels, "hikes": hikes_js}, ensure_ascii=False)
+    updated = now.strftime("%H:%M")
+    return f"""<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lofoten žygių žemėlapis</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body {{ margin:0; background:#0b1020; color:#e5e7eb;
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }}
+  #map {{ position:fixed; top:0; left:0; right:0; bottom:96px; }}
+  .bar {{ position:fixed; left:0; right:0; bottom:0; height:96px; background:#111a33;
+          padding:10px 16px; box-sizing:border-box; z-index:1000; }}
+  .bar .lbl {{ font-size:15px; margin-bottom:6px; display:flex;
+               justify-content:space-between; align-items:center; }}
+  .bar input {{ width:100%; }}
+  .back {{ color:#93c5fd; text-decoration:none; font-size:14px; }}
+  .mk {{ width:36px; height:36px; border-radius:50%; display:flex; align-items:center;
+        justify-content:center; font-weight:700; font-size:14px; color:#0b1020;
+        border:2px solid #0b1020; box-shadow:0 1px 4px rgba(0,0,0,.6); }}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="bar">
+  <div class="lbl"><b id="tlabel"></b><a class="back" href="index.html">← sąrašas</a></div>
+  <input id="slider" type="range" min="0" value="0" step="1">
+</div>
+<script>
+const D = {data};
+const map = L.map('map', {{zoomControl:false}}).setView([68.12, 13.8], 8);
+L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',
+  {{attribution:'© OpenStreetMap', maxZoom:15}}).addTo(map);
+function color(s) {{
+  if (s === null) return '#475569';
+  if (s >= 80) return '#22c55e';
+  if (s >= 60) return '#86efac';
+  if (s >= 50) return '#fde047';
+  if (s >= 40) return '#f59e0b';
+  return '#ef4444';
+}}
+const markers = D.hikes.map(h => {{
+  const m = L.marker([h.la, h.lo], {{icon: L.divIcon({{className:'', iconSize:[36,36]}})}}).addTo(map);
+  m.bindPopup('');
+  return m;
+}});
+const slider = document.getElementById('slider');
+slider.max = D.times.length - 1;
+function render(i) {{
+  document.getElementById('tlabel').textContent = D.times[i];
+  D.hikes.forEach((h, j) => {{
+    const s = h.s[i];
+    markers[j].setIcon(L.divIcon({{className:'', iconSize:[36,36],
+      html:`<div class="mk" style="background:${{color(s)}}">${{s === null ? '–' : s}}</div>`}}));
+    markers[j].setPopupContent(`<b>${{h.n}}</b><br>${{h.e}} m · score ${{s === null ? 'nėra duomenų' : s}}<br>${{D.times[i]}}`);
+  }});
+}}
+slider.addEventListener('input', () => render(+slider.value));
+render(0);
+</script>
+</body>
+</html>
+"""
+
 
 # ---------------------------------------------------------------- stale fallback
 
@@ -554,6 +647,7 @@ def main():
         model_runs = None
         print(f"Modelių meta nepavyko: {e}", file=sys.stderr)
     html = build_html(hikes_data, now, model_runs=model_runs)
+    write_map(build_map_html(hikes_data, now))
     write_html(html)
     print(f"Sugeneruota: {OUT_PATH} ir {ROOT_PATH}")
 
