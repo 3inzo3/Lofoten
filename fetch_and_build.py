@@ -356,13 +356,13 @@ def build_html(hikes_data, now, stale_note=""):
                 badges += (f'<div class="win" style="background:{bg};color:{fg}">'
                            f'<b>{fmt_window(w, now)}</b>{golden} · score {w["display"]} · {v}</div>')
 
-        # 48h juostelė: kiekvienos 3h juostos score tiksliomis valandomis,
+        # Juostelė iki pat išvykimo: kiekvienos valandos score,
         # sugrupuota pagal dienas — matosi ir tarpiniai 40-59 ("rizikinga")
         strip = ""
         if not is_done:
             days = {}
             for b in h.get("bands", []):
-                if b["t"] + dt.timedelta(hours=b["dur"]) <= now or b["t"] > now + dt.timedelta(hours=48):
+                if b["t"] + dt.timedelta(hours=b["dur"]) <= now:
                     continue
                 days.setdefault(b["t"].date(), []).append(b)
             for day, bs in sorted(days.items()):
