@@ -46,8 +46,8 @@ Kiekvienai 3h prognozės juostai iki 2026-07-23 06:00:
 
 Jei modelis neduoda `cbase` — naudojamas proxy: `125 × (temp − dew_point)`.
 
-**Langas** = ≥2 iš eilės juostos su score ≥ 60. Langai 19:00–01:00 gauna 🌅
-golden light žymę (+5 rodomam score). Verdiktai: 80+ „PUIKUS", 60+ „GERAS",
+**Langas** = ištisinis ≥3 val. periodas su score ≥ 50. Langai 19:00–01:00 gauna 🌅
+golden light žymę (+5 rodomam score). Verdiktai: 80+ „PUIKUS", 60+ „GERAS", 50+ „VERTA BANDYTI",
 40+ „RIZIKINGA", <40 „NEVERTA".
 
 ## Failai
