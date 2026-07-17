@@ -23,6 +23,12 @@ import requests
 
 OSLO = ZoneInfo("Europe/Oslo")
 API_URL = "https://api.windy.com/api/point-forecast/v2"
+# Trial/Premium raktai ECMWF neturi — ICON-EU (~7 km) geriausias prieinamas
+# modelis Norvegijai; jei jo nepriimtų, krentam į GFS.
+MODEL = "iconEu"
+FALLBACK_MODEL = "gfs"
+MODEL_LABELS = {"iconEu": "ICON-EU", "gfs": "GFS", "ecmwf": "ECMWF"}
+USED_MODELS = set()
 OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs", "index.html")
 
 # Skrendam 07-23 ryte — po šio laiko langų neberodom
@@ -92,27 +98,29 @@ WEEKDAYS_LT = ["pirmadienis", "antradienis", "trečiadienis", "ketvirtadienis",
 # ---------------------------------------------------------------- Windy API
 
 def fetch_point(lat, lon, api_key):
-    """Vienas POST vienam taškui. Grąžina žodyną su laiko eilutėmis arba meta išimtį."""
-    payload = {
-        "lat": round(lat, 4),
-        "lon": round(lon, 4),
-        "model": "ecmwf",
-        "parameters": ["temp", "dewpoint", "precip", "wind", "windGust",
-                       "lclouds", "mclouds", "hclouds", "rh", "cbase"],
-        "levels": ["surface"],
-        "key": api_key,
-    }
+    """Vienas POST vienam taškui. Grąžina žodyną su laiko eilutėmis arba meta išimtį.
+    400 atveju prisitaiko: keičia modelį į atsarginį, meta lauk nepalaikomus parametrus."""
+    params = ["temp", "dewpoint", "precip", "wind", "windGust",
+              "lclouds", "mclouds", "hclouds", "rh", "cbase"]
+    model = MODEL
     last_err = None
-    for attempt in range(3):
+    for attempt in range(5):
+        payload = {"lat": round(lat, 4), "lon": round(lon, 4), "model": model,
+                   "parameters": params, "levels": ["surface"], "key": api_key}
         try:
             r = requests.post(API_URL, json=payload, timeout=30)
-            if r.status_code == 400 and "cbase" in r.text:
-                # kai kurie modeliai cbase neturi — bandome be jo
-                payload["parameters"] = [p for p in payload["parameters"] if p != "cbase"]
-                r = requests.post(API_URL, json=payload, timeout=30)
+            if r.status_code == 400:
+                if "model must be" in r.text and model != FALLBACK_MODEL:
+                    model = FALLBACK_MODEL
+                    continue
+                bad = [p for p in params if p in r.text]
+                if bad and len(bad) < len(params):
+                    params = [p for p in params if p not in bad]
+                    continue
             if r.status_code >= 400:
                 # įtraukiam atsakymo tekstą — kitaip logai nieko nepasako
                 raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
+            USED_MODELS.add(model)
             return r.json()
         except Exception as e:  # tinklo/API klaida — retry su pauze
             last_err = e
@@ -351,6 +359,7 @@ def build_html(hikes_data, now, stale_note=""):
     </div>""")
 
     updated = now.strftime("%Y-%m-%d %H:%M")
+    model_txt = "/".join(sorted(MODEL_LABELS.get(m, m) for m in USED_MODELS)) or "—"
     stale_html = f'<div class="stale">⚠️ {stale_note}</div>' if stale_note else ""
 
     return f"""<!DOCTYPE html>
@@ -384,7 +393,7 @@ def build_html(hikes_data, now, stale_note=""):
     {hero}
   </div>
   {''.join(cards)}
-  <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: Windy ECMWF ·
+  <div class="footer">Atnaujinta: {updated} (Oslo laiku) · Duomenys: Windy {model_txt} ·
   Score = viršūnės matomumo tikimybė · 🌅 = golden light langas</div>
 </body>
 </html>
