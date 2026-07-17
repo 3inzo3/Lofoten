@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Lofoten Hike Window Finder
-Traukia Open-Meteo prognozes (4 modeliai: MEPS, ECMWF, ICON-EU, GFS)
+Traukia Open-Meteo prognozes (MEPS 45% + ECMWF 35% + ICON-EU 20%)
 žygių taškams, skaičiuoja viršūnės matomumo score (0-100) kiekvienai
-valandai kaip modelių vidurkį, grupuoja į langus ir generuoja index.html.
+valandai kaip svertinį modelių vidurkį, grupuoja į langus ir generuoja index.html.
 
 Paleidimas: python fetch_and_build.py  (rakto nereikia)
 """
@@ -23,10 +23,11 @@ import requests
 
 OSLO = ZoneInfo("Europe/Oslo")
 # Open-Meteo — nemokamas, be rakto, keli modeliai vienu užklausimu.
-# M = MEPS/MET Nordic (1 km, norvegų), E = ECMWF IFS, I = ICON-EU, G = GFS.
+# Svertinis konsensusas: M = MEPS (norvegų, tiksliausias čia), E = ECMWF,
+# I = ICON-EU kaip arbitras. GFS (25 km) išmestas — per grubus fjordams.
 OM_URL = "https://api.open-meteo.com/v1/forecast"
-OM_MODELS = [("metno_seamless", "M"), ("ecmwf_ifs025", "E"),
-             ("icon_eu", "I"), ("gfs_seamless", "G")]
+OM_MODELS = [("metno_seamless", "M", 0.45), ("ecmwf_ifs025", "E", 0.35),
+             ("icon_eu", "I", 0.20)]
 OM_VARS = ["temperature_2m", "dew_point_2m", "relative_humidity_2m",
            "cloud_cover_low", "cloud_cover_mid", "precipitation",
            "wind_speed_10m", "wind_gusts_10m"]
@@ -125,7 +126,7 @@ def fetch_point(lat, lon):
     params = {
         "latitude": round(lat, 4), "longitude": round(lon, 4),
         "hourly": ",".join(OM_VARS),
-        "models": ",".join(m for m, _ in OM_MODELS),
+        "models": ",".join(m for m, _, _ in OM_MODELS),
         "timezone": "UTC", "forecast_days": 7, "wind_speed_unit": "ms",
     }
     last_err = None
@@ -144,8 +145,7 @@ def fetch_model_runs():
     """Kada paskutinį kartą inicializuotas kiekvienas modelis (best-effort)."""
     paths = {"M": ["metno_nordic_pp", "metno_nordic", "met_no_nordic"],
              "E": ["ecmwf_ifs025"],
-             "I": ["dwd_icon_eu"],
-             "G": ["ncep_gfs013", "ncep_gfs025"]}
+             "I": ["dwd_icon_eu"]}
     runs = {}
     for letter, cands in paths.items():
         for p in cands:
@@ -209,8 +209,9 @@ def parse_bands(data, elev, now):
         if t < now - dt.timedelta(hours=1) or t < DISPLAY_FROM or t >= DEADLINE:
             continue
         per_model = {}
+        weights = {}
         lcls, prs, winds = [], [], []
-        for model, letter in OM_MODELS:
+        for model, letter, weight in OM_MODELS:
             lcl = at(col("cloud_cover_low", model), i)
             if lcl is None:  # modelis šiam laikui duomenų nebeturi
                 continue
@@ -228,12 +229,14 @@ def parse_bands(data, elev, now):
                 cb = max(0.0, 125.0 * (100.0 - rh) / 5.0)
             s = band_score(lcl, mcl, pr * 3.0, wind, gust, rh, cb, elev)
             per_model[letter] = round(s)
+            weights[letter] = weight
             lcls.append(lcl); prs.append(pr); winds.append(wind or 0)
         if not per_model:
             continue
+        wsum = sum(weights.values())
         bands.append({
             "t": t, "dur": 1,
-            "score": sum(per_model.values()) / len(per_model),
+            "score": sum(per_model[k] * weights[k] for k in per_model) / wsum,
             "models": per_model,
             "lcl": sum(lcls) / len(lcls),
             "precip": sum(prs) / len(prs),
@@ -424,7 +427,7 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
         runs_txt = ("<br>Modelių leidimai: "
                     + " · ".join(f"{k} {v.strftime('%m-%d %H:%M')}"
                                  for k, v in sorted(model_runs.items())))
-    model_txt = "Open-Meteo · 4 modelių vidurkis: M=MEPS E=ECMWF I=ICON-EU G=GFS"
+    model_txt = "Open-Meteo · svertinis vidurkis: M=MEPS 45% · E=ECMWF 35% · I=ICON-EU 20%"
     stale_html = f'<div class="stale">⚠️ {stale_note}</div>' if stale_note else ""
 
     return f"""<!DOCTYPE html>
@@ -486,14 +489,12 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
   <details class="legend">
     <summary>ℹ️ Kaip skaičiuojamas score? Kas yra M E I G?</summary>
     <p><b>Score 0–100</b> — tikimybė, kad nuo viršūnės matysis vaizdai (ne oro
-    „gerumas"!). Tai <b>4 orų modelių vidurkis</b>; po langeliu — kiekvieno
+    „gerumas"!). Tai <b>svertinis 3 modelių vidurkis</b>; po langeliu — kiekvieno
     modelio balas atskirai:</p>
-    <p><b>M</b> = MEPS (norvegų, 2.5 km — tiksliausias Lofotenams)<br>
-    <b>E</b> = ECMWF (europinis, 9 km)<br>
-    <b>I</b> = ICON-EU (vokiečių, 7 km)<br>
-    <b>G</b> = GFS (amerikiečių, 25 km)</p>
-    <p>Kai visi rodo panašiai — prognozė patikima; kai išsiskiria (pvz. M80 E75
-    I0 G0) — 50/50, spręsk pagal dangų.</p>
+    <p><b>M</b> = MEPS (norvegų, 2.5 km — tiksliausias Lofotenams, svoris 45 %)<br>
+    <b>E</b> = ECMWF (europinis, 9 km, svoris 35 %)<br>
+    <b>I</b> = ICON-EU (vokiečių, 7 km, svoris 20 %)</p>
+    <p>Kai visi rodo panašiai — prognozė patikima; kai išsiskiria (pvz. M80 E75 I0) — 50/50, spręsk pagal dangų.</p>
     <p><b>Baudos:</b> daugiausiai atima žemi debesys (dengia viršūnę) ir debesų
     pagrindas žemiau viršūnės; toliau lietus, vėjas &gt;8 m/s, rūkas. Aukšti
     plunksniniai debesys nebaudžiami — jie tik gražina dangų.</p>
