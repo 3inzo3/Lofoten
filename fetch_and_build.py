@@ -43,6 +43,8 @@ def write_html(html):
 
 # Skrendam 07-23 ryte — po šio laiko langų neberodom
 DEADLINE = dt.datetime(2026, 7, 23, 6, 0, tzinfo=OSLO)
+# Langai rodomi tik nuo šio laiko (ankstesni intervalai nebeaktualūs)
+DISPLAY_FROM = dt.datetime(2026, 7, 17, 20, 0, tzinfo=OSLO)
 # Iki 07-19 bazė Ramberg, po to Reine
 BASE_SWITCH = dt.datetime(2026, 7, 19, 12, 0, tzinfo=OSLO)
 # "tonight" žygis po šios nakties tampa done
@@ -51,22 +53,22 @@ TONIGHT_UNTIL = dt.datetime(2026, 7, 18, 6, 0, tzinfo=OSLO)
 HIKES = [
     {"id": 1, "name": "Festvågtinden", "elev_m": 541, "lat": 68.1717, "lon": 14.2208,
      "zone": "Henningsvær", "drive_from_ramberg_min": 60, "drive_from_reine_min": 90,
-     "status": "planned", "note": "virš Henningsvær stadiono"},
+     "status": "planned", "prio": 1, "note": "D2 · stadionas, Henningsvær zona"},
     {"id": 2, "name": "Fløya", "elev_m": 590, "lat": 68.2449, "lon": 14.5776,
      "zone": "Svolvær", "drive_from_ramberg_min": 80, "drive_from_reine_min": 110,
-     "status": "planned", "note": "Djevelporten"},
+     "status": "planned", "prio": 2, "note": "D3 · Djevelporten, virš Svolvær"},
     {"id": 3, "name": "Offersøykammen", "elev_m": 436, "lat": 68.1545, "lon": 13.5145,
      "zone": "Leknes", "drive_from_ramberg_min": 30, "drive_from_reine_min": 60,
-     "status": "done", "note": "PADARYTA 07-16"},
+     "status": "done", "prio": 3, "note": "D4 · PADARYTA 07-16"},
     {"id": 4, "name": "Volandstinden", "elev_m": 457, "lat": 68.0709, "lon": 13.2139,
      "zone": "Fredvang", "drive_from_ramberg_min": 10, "drive_from_reine_min": 40,
-     "status": "planned", "note": "Shark Fin, Fredvang tiltai"},
+     "status": "planned", "prio": 4, "note": "D5 · Shark Fin, kartu su Haukland + Uttakleiv"},
     {"id": 5, "name": "Ryten", "elev_m": 543, "lat": 68.0855, "lon": 13.1426,
      "zone": "Fredvang", "drive_from_ramberg_min": 20, "drive_from_reine_min": 45,
-     "status": "planned", "note": "TOP prioritetas, Kvalvika vaizdas, geriausia sunset/vakaras"},
+     "status": "planned", "prio": 5, "note": "D8 · TOP · RYTOJ NAKTĮ · sunset virš Kvalvika"},
     {"id": 6, "name": "Reinebringen", "elev_m": 448, "lat": 67.9223, "lon": 13.0784,
      "zone": "Reine", "drive_from_ramberg_min": 40, "drive_from_reine_min": 5,
-     "status": "tonight", "note": "šįvakar 07-17 naktį, sherpa laiptai"},
+     "status": "planned", "prio": 6, "note": "D9 · sunrise timing · ~1600 sherpa laiptų"},
     {"id": 7, "name": "Mannen", "elev_m": 400, "lat": 68.2020, "lon": 13.5200,
      "zone": "Haukland", "drive_from_ramberg_min": 40, "drive_from_reine_min": 70,
      "status": "planned", "note": "Haukland/Uttakleiv paplūdimių vaizdai, lengvas"},
@@ -200,7 +202,7 @@ def parse_bands(data, elev, now):
     bands = []
     for i, ms in enumerate(ts):
         t = dt.datetime.fromtimestamp(ms / 1000, tz=OSLO)
-        if t < now - dt.timedelta(hours=3) or t >= DEADLINE:
+        if t < now - dt.timedelta(hours=3) or t < DISPLAY_FROM or t >= DEADLINE:
             continue
         u, v = at(wu, i), at(wv, i)
         wind = math.sqrt(u * u + v * v) if u is not None and v is not None else None
@@ -340,8 +342,15 @@ def build_html(hikes_data, now, stale_note=""):
         hero = f"Prognozės ribose (iki {horizon_txt}) gerų langų nėra. Atnaujinam kas 3 val. 🤞"
         hero_color = "#f87171"
 
+    main_list = sorted((h for h in hikes_data if h["hike"].get("prio")),
+                       key=lambda x: x["hike"]["prio"])
+    rest = ([h for h in active if not h["hike"].get("prio")]
+            + [h for h in done if not h["hike"].get("prio")])
+
     cards = []
-    for h in active + done:
+    for h in main_list + rest:
+        if rest and h is rest[0]:
+            cards.append('<div class="seclbl">PAPILDOMI ŽYGIAI</div>')
         hike = h["hike"]
         status = hike["status"]
         is_done = status == "done" or (status == "tonight" and now >= TONIGHT_UNTIL)
@@ -389,11 +398,8 @@ def build_html(hikes_data, now, stale_note=""):
                 strip += f'<div class="striplbl">{lbl}</div><div class="strip">{cells}</div>'
 
         note = ""
-        if not is_done:
-            if hike["name"] == "Ryten":
-                note = '<div class="note">💡 geriausia vakare (sunset virš Kvalvika)</div>'
-            elif hike.get("note"):
-                note = f'<div class="note">💡 {hike["note"]}</div>'
+        if not is_done and hike.get("note"):
+            note = f'<div class="note">💡 {hike["note"]}</div>'
 
         title_prefix = "✅ " if is_done else ("🌙 ŠĮVAKAR: " if is_tonight else "")
         cls = "card done" if is_done else "card"
@@ -434,6 +440,7 @@ def build_html(hikes_data, now, stale_note=""):
   .x {{ font-size:10px; opacity:0.85; }}
   .stale {{ background:#7f1d1d; color:#fecaca; border-radius:10px; padding:10px 14px;
             margin-bottom:16px; font-size:16px; }}
+  .seclbl {{ font-size:13px; letter-spacing:2px; color:#9ca3af; margin:22px 0 10px; }}
   .footer {{ margin-top:24px; font-size:12px; color:#6b7280; text-align:center; }}
 </style>
 </head>
