@@ -468,7 +468,7 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
 <body>
   {stale_html}
   <div class="topbar">
-    <button class="refresh" onclick="location.reload()">🔄 Atnaujinti</button>
+    <button class="refresh" onclick="location.href=location.pathname+'?r='+Date.now()">🔄 Atnaujinti</button>
     <span class="upd">Atnaujinta {updated_short}</span>
   </div>
   <details class="legend">
