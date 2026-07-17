@@ -355,19 +355,23 @@ def build_html(hikes_data, now, stale_note=""):
                 badges += (f'<div class="win" style="background:{bg};color:{fg}">'
                            f'<b>{fmt_window(w, now)}</b>{golden} · score {w["display"]} · {v}</div>')
 
-        # 24h juostelė: kiekvienos 3h juostos score, spalvinta pagal verdiktą —
-        # matosi ir tarpiniai 40-59 ("rizikinga, bet įmanoma")
+        # 48h juostelė: kiekvienos 3h juostos score tiksliomis valandomis,
+        # sugrupuota pagal dienas — matosi ir tarpiniai 40-59 ("rizikinga")
         strip = ""
         if not is_done:
-            cells = ""
+            days = {}
             for b in h.get("bands", []):
-                if b["t"] + dt.timedelta(hours=3) <= now or b["t"] > now + dt.timedelta(hours=24):
+                if b["t"] + dt.timedelta(hours=3) <= now or b["t"] > now + dt.timedelta(hours=48):
                     continue
-                _, fg, bg = verdict(b["score"])
-                cells += (f'<span class="b" style="background:{bg};color:{fg}">'
-                          f'{b["t"].strftime("%H")}h<br>{round(b["score"])}</span>')
-            if cells:
-                strip = f'<div class="striplbl">Artimiausios 24 val. (score kas 3h):</div><div class="strip">{cells}</div>'
+                days.setdefault(b["t"].date(), []).append(b)
+            for day, bs in sorted(days.items()):
+                cells = ""
+                for b in bs:
+                    _, fg, bg = verdict(b["score"])
+                    cells += (f'<span class="b" style="background:{bg};color:{fg}">'
+                              f'{b["t"].strftime("%H:%M")}<br><b>{round(b["score"])}</b></span>')
+                lbl = day_label(bs[0]["t"], now).capitalize()
+                strip += f'<div class="striplbl">{lbl}</div><div class="strip">{cells}</div>'
 
         note = ""
         if not is_done:
