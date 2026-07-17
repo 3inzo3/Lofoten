@@ -354,33 +354,34 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
                 badges += (f'<div class="win"><b>{fmt_window(w, now)}</b>{golden} · '
                            f'<b style="color:{fg}">score {w["display"]} · {v}</b></div>')
 
-        # Juostelė iki pat išvykimo: kiekvienos valandos score,
-        # sugrupuota pagal dienas — matosi ir tarpiniai 40-59 ("rizikinga")
+        # Valandinė lentelė iki išvykimo (kaip yr.no): diena — antraštė,
+        # eilutė = valanda su score, priežastim ir modelių balais
         strip = ""
         if not is_done:
-            days = {}
+            rows = ""
+            cur_day = None
             for b in h.get("bands", []):
                 if b["t"] + dt.timedelta(hours=b["dur"]) <= now:
                     continue
-                days.setdefault(b["t"].date(), []).append(b)
-            for day, bs in sorted(days.items()):
-                cells = ""
-                for b in bs:
-                    _, fg, bg = verdict(b["score"])
-                    # priežastys po score: žemi debesys visada, lietus/vėjas kai reikšmingi
-                    why = f'☁{round(b.get("lcl") or 0)}%'
-                    if (b.get("precip") or 0) >= 0.1:
-                        why += f' 🌧{b["precip"]:.1f}'
-                    if (b.get("wind") or 0) > 8:
-                        why += f' 💨{round(b["wind"])}'
-                    mm = " ".join(f"{k}{v}" for k, v in b.get("models", {}).items())
-                    cells += (f'<span class="b">'
-                              f'{b["t"].strftime("%H:%M")}<br>'
-                              f'<b style="color:{fg}">{round(b["score"])}</b>'
-                              f'<br><span class="x">{why}</span>'
-                              f'<br><span class="m">{mm}</span></span>')
-                lbl = day_label(bs[0]["t"], now).capitalize()
-                strip += f'<div class="striplbl">{lbl}</div><div class="strip">{cells}</div>'
+                if b["t"].date() != cur_day:
+                    cur_day = b["t"].date()
+                    rows += (f'<tr class="dayrow"><td colspan="6">'
+                             f'{day_label(b["t"], now).capitalize()}</td></tr>')
+                _, fg, _ = verdict(b["score"])
+                pr = b.get("precip") or 0
+                pr_txt = f"{pr:.1f}" if pr >= 0.1 else ""
+                w = b.get("wind")
+                w_txt = f"{round(w)}" if w is not None else ""
+                mm = " ".join(f"{k}{v}" for k, v in b.get("models", {}).items())
+                rows += (f'<tr><td class="t">{b["t"].strftime("%H:%M")}</td>'
+                         f'<td class="s" style="color:{fg}">{round(b["score"])}</td>'
+                         f'<td>{round(b.get("lcl") or 0)}%</td>'
+                         f'<td>{pr_txt}</td><td>{w_txt}</td>'
+                         f'<td class="mods">{mm}</td></tr>')
+            if rows:
+                strip = ('<table class="fx"><tr class="hdr"><td>Laikas</td><td>Score</td>'
+                         '<td>☁ žemi</td><td>🌧 mm</td><td>💨 m/s</td><td>Modeliai</td></tr>'
+                         + rows + '</table>')
 
         note = ""
         if not is_done and hike.get("note"):
@@ -448,13 +449,16 @@ def build_html(hikes_data, now, stale_note="", model_runs=None):
   .win {{ border-radius:10px; padding:8px 12px; margin:6px 0; font-size:16px;
          background:#182142; color:#e5e7eb; }}
   .note {{ font-size:14px; color:#fbbf24; margin-top:6px; }}
-  .striplbl {{ font-size:12px; color:#9ca3af; margin-top:8px; }}
-  .strip {{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }}
-  .b {{ border-radius:6px; padding:3px 7px; font-size:13px; line-height:1.25;
-       text-align:center; min-width:44px; background:#182142; color:#94a3b8; }}
-  .b b {{ font-size:16px; }}
-  .x {{ font-size:10px; opacity:0.85; }}
-  .m {{ font-size:9px; opacity:0.7; letter-spacing:0.5px; }}
+  .fx {{ width:100%; border-collapse:collapse; margin-top:10px; }}
+  .fx td {{ padding:6px 4px; border-bottom:1px solid #1c2647; font-size:14px;
+           text-align:right; color:#cbd5e1; }}
+  .fx td.t {{ text-align:left; color:#94a3b8; }}
+  .fx .hdr td {{ font-size:11px; color:#64748b; letter-spacing:0.5px;
+                border-bottom:1px solid #2a3660; }}
+  .fx .dayrow td {{ text-align:left; color:#9ca3af; font-size:13px;
+                   padding-top:16px; letter-spacing:1px; border-bottom:1px solid #2a3660; }}
+  .fx .s {{ font-weight:700; font-size:16px; }}
+  .fx .mods {{ font-size:11px; color:#64748b; white-space:nowrap; }}
   .stale {{ background:#7f1d1d; color:#fecaca; border-radius:10px; padding:10px 14px;
             margin-bottom:16px; font-size:16px; }}
   .seclbl {{ font-size:13px; letter-spacing:2px; color:#9ca3af; margin:22px 0 10px; }}
