@@ -1,0 +1,46 @@
+name: Atnaujinti prognozę
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"   # kas 3 valandas
+  workflow_dispatch:         # rankinis paleidimas iš Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-forecast
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Priklausomybės
+        run: pip install -r requirements.txt
+
+      - name: Traukti prognozę ir generuoti puslapį
+        env:
+          WINDY_API_KEY: ${{ secrets.WINDY_API_KEY }}
+        run: python fetch_and_build.py
+
+      - name: Commit ir push
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          if git diff --cached --quiet; then
+            echo "Pakeitimų nėra"
+          else
+            git commit -m "Atnaujinta prognozė: $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
