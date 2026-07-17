@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Lofoten Hike Window Finder
-Traukia MET Norway (yr.no) locationforecast prognozes žygių taškams,
-skaičiuoja viršūnės matomumo score (0-100) kiekvienai juostai (1h arti,
-6h toliau), grupuoja į langus ir generuoja docs/index.html.
+Traukia Open-Meteo prognozes (4 modeliai: MEPS, ECMWF, ICON-EU, GFS)
+žygių taškams, skaičiuoja viršūnės matomumo score (0-100) kiekvienai
+valandai kaip modelių vidurkį, grupuoja į langus ir generuoja index.html.
 
 Paleidimas: python fetch_and_build.py  (rakto nereikia)
 """
@@ -22,10 +22,14 @@ import requests
 # ---------------------------------------------------------------- konfigūracija
 
 OSLO = ZoneInfo("Europe/Oslo")
-# MET Norway (yr.no) — nemokamas, be rakto; MEPS 2.5 km modelis Skandinavijai.
-# Būtinas identifikuojantis User-Agent pagal jų naudojimo taisykles.
-YR_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
-YR_UA = "LofotenHikeRadar/1.0 (+https://github.com/3inzo3/Lofoten)"
+# Open-Meteo — nemokamas, be rakto, keli modeliai vienu užklausimu.
+# M = MEPS/MET Nordic (1 km, norvegų), E = ECMWF IFS, I = ICON-EU, G = GFS.
+OM_URL = "https://api.open-meteo.com/v1/forecast"
+OM_MODELS = [("metno_seamless", "M"), ("ecmwf_ifs025", "E"),
+             ("icon_eu", "I"), ("gfs_seamless", "G")]
+OM_VARS = ["temperature_2m", "dew_point_2m", "relative_humidity_2m",
+           "cloud_cover_low", "cloud_cover_mid", "precipitation",
+           "wind_speed_10m", "wind_gusts_10m"]
 _BASE = os.path.dirname(os.path.abspath(__file__))
 OUT_PATH = os.path.join(_BASE, "docs", "index.html")
 # Rašom ir į repo šaknį — tada Pages veikia nesvarbu, ar folderis / ar /docs
@@ -104,22 +108,27 @@ HIKES = [
 WEEKDAYS_LT = ["pirmadienis", "antradienis", "trečiadienis", "ketvirtadienis",
                "penktadienis", "šeštadienis", "sekmadienis"]
 
-# ---------------------------------------------------------------- yr.no API
+# ---------------------------------------------------------------- Open-Meteo API
 
 def fetch_point(lat, lon):
-    """GET vienam taškui iš MET Norway. Grąžina locationforecast JSON."""
+    """GET vienam taškui — visi modeliai vienu užklausimu."""
+    params = {
+        "latitude": round(lat, 4), "longitude": round(lon, 4),
+        "hourly": ",".join(OM_VARS),
+        "models": ",".join(m for m, _ in OM_MODELS),
+        "timezone": "UTC", "forecast_days": 7, "wind_speed_unit": "ms",
+    }
     last_err = None
     for attempt in range(4):
         try:
-            r = requests.get(YR_URL, params={"lat": round(lat, 4), "lon": round(lon, 4)},
-                             headers={"User-Agent": YR_UA}, timeout=30)
+            r = requests.get(OM_URL, params=params, timeout=30)
             if r.status_code >= 400:
-                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:250]}")
             return r.json()
         except Exception as e:  # tinklo/API klaida — retry su pauze
             last_err = e
             time.sleep(2 * (attempt + 1))
-    raise RuntimeError(f"yr.no API nepavyko ({lat},{lon}): {last_err}")
+    raise RuntimeError(f"Open-Meteo nepavyko ({lat},{lon}): {last_err}")
 
 # ---------------------------------------------------------------- vertinimas
 
@@ -150,44 +159,52 @@ def band_score(lclouds, mclouds, precip, wind, gust, rh, cbase, elev, fog=None):
 
 
 def parse_bands(data, elev, now):
-    """yr.no atsakymą paverčia į [{t, dur, score, ...}] juostas (1h arti, 6h toliau)."""
-    entries = (data.get("properties") or {}).get("timeseries") or []
+    """Open-Meteo atsakymą paverčia į valandines juostas su per-modelio score."""
+    h = data.get("hourly") or {}
+    times = h.get("time") or []
+
+    def col(var, model):
+        return h.get(f"{var}_{model}") or h.get(var)
+
+    def at(arr, i):
+        v = arr[i] if arr is not None and i < len(arr) else None
+        return v
+
     bands = []
-    for e in entries:
-        t = dt.datetime.fromisoformat(e["time"].replace("Z", "+00:00")).astimezone(OSLO)
+    for i, ts in enumerate(times):
+        t = dt.datetime.fromisoformat(ts).replace(tzinfo=dt.timezone.utc).astimezone(OSLO)
         if t < now - dt.timedelta(hours=1) or t < DISPLAY_FROM or t >= DEADLINE:
             continue
-        d = e.get("data") or {}
-        inst = (d.get("instant") or {}).get("details") or {}
-        if "next_1_hours" in d:
-            dur, nxt = 1, d["next_1_hours"]
-        elif "next_6_hours" in d:
-            dur, nxt = 6, d["next_6_hours"]
-        else:
+        per_model = {}
+        lcls, prs, winds = [], [], []
+        for model, letter in OM_MODELS:
+            lcl = at(col("cloud_cover_low", model), i)
+            if lcl is None:  # modelis šiam laikui duomenų nebeturi
+                continue
+            mcl = at(col("cloud_cover_mid", model), i)
+            rh = at(col("relative_humidity_2m", model), i)
+            pr = at(col("precipitation", model), i) or 0.0
+            wind = at(col("wind_speed_10m", model), i)
+            gust = at(col("wind_gusts_10m", model), i)
+            t_c = at(col("temperature_2m", model), i)
+            d_c = at(col("dew_point_2m", model), i)
+            cb = None
+            if t_c is not None and d_c is not None:
+                cb = max(0.0, 125.0 * (t_c - d_c))
+            elif t_c is not None and rh is not None:
+                cb = max(0.0, 125.0 * (100.0 - rh) / 5.0)
+            s = band_score(lcl, mcl, pr * 3.0, wind, gust, rh, cb, elev)
+            per_model[letter] = round(s)
+            lcls.append(lcl); prs.append(pr); winds.append(wind or 0)
+        if not per_model:
             continue
-        pr = (nxt.get("details") or {}).get("precipitation_amount") or 0.0
-        precip3h = pr * 3.0 if dur == 1 else pr / 2.0  # normuojam į mm/3h intensyvumą
-
-        lcl = inst.get("cloud_area_fraction_low")
-        mcl = inst.get("cloud_area_fraction_medium")
-        rh = inst.get("relative_humidity")
-        fog = inst.get("fog_area_fraction")
-        wind = inst.get("wind_speed")
-        gust = inst.get("wind_speed_of_gust")
-        t_c = inst.get("air_temperature")
-        d_c = inst.get("dew_point_temperature")
-
-        # cloud base proxy: ~125 m × (T − Td); be dew point — įvertis iš rh
-        cb = None
-        if t_c is not None and d_c is not None:
-            cb = max(0.0, 125.0 * (t_c - d_c))
-        elif t_c is not None and rh is not None:
-            cb = max(0.0, 125.0 * (100.0 - rh) / 5.0)
-
         bands.append({
-            "t": t, "dur": dur,
-            "score": band_score(lcl, mcl, precip3h, wind, gust, rh, cb, elev, fog),
-            "lcl": lcl, "precip": pr, "wind": wind,
+            "t": t, "dur": 1,
+            "score": sum(per_model.values()) / len(per_model),
+            "models": per_model,
+            "lcl": sum(lcls) / len(lcls),
+            "precip": sum(prs) / len(prs),
+            "wind": sum(winds) / len(winds),
         })
     return bands
 
@@ -358,9 +375,11 @@ def build_html(hikes_data, now, stale_note=""):
                         why += f' 🌧{b["precip"]:.1f}'
                     if (b.get("wind") or 0) > 8:
                         why += f' 💨{round(b["wind"])}'
+                    mm = " ".join(f"{k}{v}" for k, v in b.get("models", {}).items())
                     cells += (f'<span class="b" style="background:{bg};color:{fg}">'
                               f'{b["t"].strftime("%H:%M")}<br><b>{round(b["score"])}</b>'
-                              f'<br><span class="x">{why}</span></span>')
+                              f'<br><span class="x">{why}</span>'
+                              f'<br><span class="m">{mm}</span></span>')
                 lbl = day_label(bs[0]["t"], now).capitalize()
                 strip += f'<div class="striplbl">{lbl}</div><div class="strip">{cells}</div>'
 
@@ -378,7 +397,7 @@ def build_html(hikes_data, now, stale_note=""):
     </div>""")
 
     updated = now.strftime("%Y-%m-%d %H:%M")
-    model_txt = "yr.no · MET Norway (MEPS 2.5 km)"
+    model_txt = "Open-Meteo · 4 modelių vidurkis: M=MEPS E=ECMWF I=ICON-EU G=GFS"
     stale_html = f'<div class="stale">⚠️ {stale_note}</div>' if stale_note else ""
 
     return f"""<!DOCTYPE html>
@@ -405,6 +424,7 @@ def build_html(hikes_data, now, stale_note=""):
   .b {{ border-radius:6px; padding:3px 7px; font-size:13px; line-height:1.25;
        text-align:center; min-width:44px; }}
   .x {{ font-size:10px; opacity:0.85; }}
+  .m {{ font-size:9px; opacity:0.7; letter-spacing:0.5px; }}
   .stale {{ background:#7f1d1d; color:#fecaca; border-radius:10px; padding:10px 14px;
             margin-bottom:16px; font-size:16px; }}
   .seclbl {{ font-size:13px; letter-spacing:2px; color:#9ca3af; margin:22px 0 10px; }}
@@ -468,7 +488,7 @@ def main():
 
     active_count = sum(1 for h in HIKES if h["status"] != "done")
     if failures == active_count:
-        mark_stale("yr.no API nepasiekiamas")
+        mark_stale("Open-Meteo nepasiekiamas")
         print("Visi užklausimai nepavyko — paliktas senas puslapis su įspėjimu", file=sys.stderr)
         sys.exit(1)
 

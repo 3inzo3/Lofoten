@@ -1,7 +1,7 @@
 # 🏔️ Lofoten žygių langų radaras
 
 Automatiškai atsinaujinanti svetainė, rodanti geriausius žygių langus Lofotenuose
-pagal MET Norway / yr.no (MEPS, 2.5 km) orų prognozę — valandinė raiška, be jokio API rakto. Kas 3 valandas GitHub Actions atnaujina
+pagal Open-Meteo (4 modelių konsensusas: MEPS, ECMWF, ICON-EU, GFS) — valandinė raiška, be jokio API rakto. Score = modelių vidurkis; po kiekvienu langeliu matosi kiekvieno modelio įvertis (M/E/I/G). Kas 3 valandas GitHub Actions atnaujina
 `docs/index.html` — svetainė rodo, **kada ir į kurią viršūnę verta eiti**, kad
 nuo viršaus matytųsi vaizdai.
 
@@ -10,8 +10,7 @@ cloud base aukštis, lietus antraeilis. Aukšti debesys nebaudžiami (gražina d
 
 ## Setup — 5 žingsniai
 
-1. **API rakto nereikia** — duomenys iš [api.met.no](https://api.met.no)
-   (MET Norway locationforecast), nemokami, tik User-Agent identifikacija.
+1. **API rakto nereikia** — duomenys iš [open-meteo.com](https://open-meteo.com), nemokami.
 
 2. **Įjunk GitHub Pages.**
    *Settings → Pages → Build and deployment*: Source = **Deploy from a branch**,
@@ -26,7 +25,7 @@ cloud base aukštis, lietus antraeilis. Aukšti debesys nebaudžiami (gražina d
    Pridėk į telefono Home Screen — atsidaro kaip app'as.
 
 5. **Viskas.** Toliau atsinaujina automatiškai kas 3 val. (cron `0 */3 * * *`).
-   Jei yr.no API nulūžta — puslapis lieka senas su įspėjimu „DUOMENYS PASENĘ".
+   Jei Open-Meteo nulūžta — puslapis lieka senas su įspėjimu „DUOMENYS PASENĘ".
 
 > ⚠️ Cron veikia tik iš **default šakos** (main) — įsitikink, kad šie failai
 > yra main šakoje.
@@ -53,7 +52,7 @@ golden light žymę (+5 rodomam score). Verdiktai: 80+ „PUIKUS", 60+ „GERAS"
 
 ## Failai
 
-- `fetch_and_build.py` — traukia yr.no API (16 taškų kas 3 val., gerokai žemiau MET Norway limitų), skaičiuoja, generuoja HTML
+- `fetch_and_build.py` — traukia Open-Meteo (16 taškų × 4 modeliai vienu užklausimu kas 3 val.), skaičiuoja, generuoja HTML
 - `.github/workflows/update.yml` — cron kas 3 val. + rankinis paleidimas
 - `docs/index.html` — sugeneruota svetainė (necommit'inti ranka)
 
