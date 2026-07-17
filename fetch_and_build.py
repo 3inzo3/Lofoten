@@ -22,7 +22,7 @@ import requests
 # ---------------------------------------------------------------- konfigūracija
 
 OSLO = ZoneInfo("Europe/Oslo")
-API_URL = "https://api.windy.com/point-forecast/v2"
+API_URL = "https://api.windy.com/api/point-forecast/v2"
 OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs", "index.html")
 
 # Skrendam 07-23 ryte — po šio laiko langų neberodom
@@ -110,7 +110,9 @@ def fetch_point(lat, lon, api_key):
                 # kai kurie modeliai cbase neturi — bandome be jo
                 payload["parameters"] = [p for p in payload["parameters"] if p != "cbase"]
                 r = requests.post(API_URL, json=payload, timeout=30)
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # įtraukiam atsakymo tekstą — kitaip logai nieko nepasako
+                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
             return r.json()
         except Exception as e:  # tinklo/API klaida — retry su pauze
             last_err = e
